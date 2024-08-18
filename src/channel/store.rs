@@ -1,3 +1,5 @@
+use alloc::vec::Vec;
+
 use crate::channel::token::ChannelTokenOps;
 
 use super::{
@@ -11,19 +13,17 @@ struct Channel<'a> {
     pub reg: Reg,
 }
 
-pub struct ChannelStore<'a, const N: usize> {
-    channels: [Option<Channel<'a>>; N],
-    current_size: usize,
+#[derive(Default)]
+pub struct ChannelStore<'a> {
+    channels: Vec<Channel<'a>>,
     init_complete: bool,
 }
 
-impl<'a, const N: usize> ChannelStore<'a, N> {
+impl<'a> ChannelStore<'a> {
     fn get_existing_channel_accessor_id(&self, name: &'a str) -> Result<usize, ()> {
-        for (i, channel_o) in self.channels.iter().enumerate() {
-            if let Some(some_channel) = channel_o {
-                if some_channel.name == name {
-                    return Ok(i);
-                }
+        for (i, channel) in self.channels.iter().enumerate() {
+            if channel.name == name {
+                return Ok(i);
             }
         }
 
@@ -37,15 +37,12 @@ impl<'a, const N: usize> ChannelStore<'a, N> {
     }
 
     fn register_channel(&mut self, name: &'a str, owner_id: usize, reg: Reg) -> usize {
-        assert!(self.current_size < self.channels.len());
-
-        let accessor_id = self.current_size;
-        self.channels[self.current_size] = Some(Channel {
+        let accessor_id = self.channels.len();
+        self.channels.push(Channel {
             name,
             owner_id,
             reg,
         });
-        self.current_size += 1;
 
         accessor_id
     }
@@ -71,28 +68,15 @@ impl<'a, const N: usize> ChannelStore<'a, N> {
     }
 }
 
-impl<'a, const N: usize> Default for ChannelStore<'a, N> {
-    fn default() -> Self {
-        Self {
-            channels: [const { None }; N],
-            current_size: 0,
-            init_complete: false,
-        }
-    }
-}
-
 pub trait RegViewProducer<'a, T, K> {
     fn grab(&'a self, token: &T) -> K;
 }
 
-impl<'a, const N: usize> RegViewProducer<'a, ChannelOwnerToken, RegMutView<'a>>
-    for ChannelStore<'a, N>
-{
+impl<'a> RegViewProducer<'a, ChannelOwnerToken, RegMutView<'a>> for ChannelStore<'a> {
     fn grab(&'a self, token: &ChannelOwnerToken) -> RegMutView<'a> {
         let accessor_id = token.get_accessor_id();
-        assert!(accessor_id < self.current_size);
 
-        if let Some(Some(channel)) = self.channels.get(accessor_id) {
+        if let Some(channel) = self.channels.get(accessor_id) {
             return RegMutView::new(&channel.reg);
         } else {
             panic!("Invalid accessor token.");
@@ -100,14 +84,11 @@ impl<'a, const N: usize> RegViewProducer<'a, ChannelOwnerToken, RegMutView<'a>>
     }
 }
 
-impl<'a, const N: usize> RegViewProducer<'a, ChannelReaderToken, RegReadView<'a>>
-    for ChannelStore<'a, N>
-{
+impl<'a> RegViewProducer<'a, ChannelReaderToken, RegReadView<'a>> for ChannelStore<'a> {
     fn grab(&'a self, token: &ChannelReaderToken) -> RegReadView<'a> {
         let accessor_id = token.get_accessor_id();
-        assert!(accessor_id < self.current_size);
 
-        if let Some(Some(channel)) = self.channels.get(accessor_id) {
+        if let Some(channel) = self.channels.get(accessor_id) {
             return RegReadView::new(&channel.reg);
         } else {
             panic!("Invalid accessor token.");
@@ -115,21 +96,18 @@ impl<'a, const N: usize> RegViewProducer<'a, ChannelReaderToken, RegReadView<'a>
     }
 }
 
-pub struct ChannelBuilder<const N: usize> {
+pub struct ChannelBuilder {
     owner_id: usize,
 }
 
-impl<'a, const N: usize> ChannelBuilder<N> {
-    pub(super) fn new(
-        channel_store: &mut ChannelStore<'a, N>,
-        owner_id: usize,
-    ) -> ChannelBuilder<N> {
+impl<'a> ChannelBuilder {
+    pub fn new(owner_id: usize) -> ChannelBuilder {
         ChannelBuilder { owner_id }
     }
 
     pub fn register_write_channel(
         &mut self,
-        channel_store: &mut ChannelStore<'a, N>,
+        channel_store: &mut ChannelStore<'a>,
         name: &'a str,
         reg: Reg,
     ) -> ChannelOwnerToken {
@@ -138,7 +116,7 @@ impl<'a, const N: usize> ChannelBuilder<N> {
 
     pub fn register_read_channel(
         &self,
-        channel_store: &mut ChannelStore<'a, N>,
+        channel_store: &mut ChannelStore<'a>,
         name: &'a str,
     ) -> ChannelReaderToken {
         channel_store.register_read_channel(name)

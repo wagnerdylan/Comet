@@ -26,11 +26,10 @@ fn register_api() {
     }
 }
 
-/*
 #[test]
 fn channel_api() {
-    let mut channel_store: ChannelStore<10> = ChannelStore::default();
-    let mut channel_builder = ChannelBuilder::new(&mut channel_store);
+    let mut channel_store = ChannelStore::default();
+    let mut channel_builder = ChannelBuilder::new(0usize);
 
     let t_1_o = channel_builder.register_write_channel(
         &mut channel_store,
@@ -56,4 +55,3 @@ fn channel_api() {
     let reg_val: u32 = read_reg.get();
     assert_eq!(reg_val, 10u32);
 }
-*/
