@@ -1,8 +1,11 @@
-use super::{reg::Reg, token::ChannelToken};
+use super::{
+    reg::{Reg, RegMutView, RegReadView},
+    token::{ChannelOwnerToken, ChannelReaderToken},
+};
 
 struct Channel<'a> {
     pub name: &'a str,
-    pub owner_token: usize,
+    pub owner_token_id: usize,
     pub reg: Reg,
 }
 
@@ -34,31 +37,31 @@ impl<'a, const N: usize> ChannelStore<'a, N> {
     fn register_channel(&mut self, name: &'a str, reg: Reg) -> (usize, usize) {
         assert!(self.current_size < self.channels.len());
 
-        let owner_token = self.current_size;
+        let owner_token_id = self.current_size;
         let accessor_id = self.current_size;
         self.channels[self.current_size] = Some(Channel {
             name,
-            owner_token,
+            owner_token_id,
             reg,
         });
         self.current_size += 1;
 
-        (owner_token, accessor_id)
+        (owner_token_id, accessor_id)
     }
 
-    pub fn register_write_channel(&mut self, name: &'a str, reg: Reg) -> ChannelToken {
+    pub fn register_write_channel(&mut self, name: &'a str, reg: Reg) -> ChannelOwnerToken {
         assert!(!self.init_complete);
         assert!(self.is_unique_channel_name(name));
-        let (owner_token, accessor_id) = self.register_channel(name, reg);
-        ChannelToken::new(Some(owner_token), accessor_id)
+        let (owner_token_id, accessor_id) = self.register_channel(name, reg);
+        ChannelOwnerToken::new(owner_token_id, accessor_id)
     }
 
-    pub fn register_read_channel(&self, name: &'a str) -> ChannelToken {
+    pub fn register_read_channel(&self, name: &'a str) -> ChannelReaderToken {
         assert!(!self.init_complete);
         let query_result = self.get_existing_channel_accessor_id(name);
         // TODO handle panic in a better way here.
         let accessor_id = query_result.unwrap();
-        ChannelToken::new(None, accessor_id)
+        ChannelReaderToken::new(accessor_id)
     }
 }
 
@@ -68,6 +71,40 @@ impl<'a, const N: usize> Default for ChannelStore<'a, N> {
             channels: [const { None }; N],
             current_size: 0,
             init_complete: false,
+        }
+    }
+}
+
+pub trait RegViewProducer<'a, T, K> {
+    fn grab(&'a self, token: &T) -> K;
+}
+
+impl<'a, const N: usize> RegViewProducer<'a, ChannelOwnerToken, RegMutView<'a>>
+    for ChannelStore<'a, N>
+{
+    fn grab(&'a self, token: &ChannelOwnerToken) -> RegMutView<'a> {
+        let accessor_id = token.get_accessor_id();
+        assert!(accessor_id < self.current_size);
+
+        if let Some(Some(channel)) = self.channels.get(accessor_id) {
+            return RegMutView::new(&channel.reg);
+        } else {
+            panic!("Invalid accessor token.");
+        }
+    }
+}
+
+impl<'a, const N: usize> RegViewProducer<'a, ChannelReaderToken, RegReadView<'a>>
+    for ChannelStore<'a, N>
+{
+    fn grab(&'a self, token: &ChannelReaderToken) -> RegReadView<'a> {
+        let accessor_id = token.get_accessor_id();
+        assert!(accessor_id < self.current_size);
+
+        if let Some(Some(channel)) = self.channels.get(accessor_id) {
+            return RegReadView::new(&channel.reg);
+        } else {
+            panic!("Invalid accessor token.");
         }
     }
 }
