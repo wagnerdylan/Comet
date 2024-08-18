@@ -1,35 +1,32 @@
-pub struct ChannelOwnerToken {
-    owner_token_id: usize,
-    accessor_id: usize,
+pub trait ChannelTokenOps {
+    fn new(accessor_id: usize) -> Self;
+
+    fn get_accessor_id(&self) -> usize;
 }
 
-impl ChannelOwnerToken {
-    pub fn new(owner_token_id: usize, accessor_id: usize) -> Self {
-        Self {
-            owner_token_id,
-            accessor_id,
-        }
-    }
-
-    pub fn get_owner_token_id(&self) -> usize {
-        self.owner_token_id
-    }
-
-    pub fn get_accessor_id(&self) -> usize {
-        self.accessor_id
-    }
+pub struct ChannelOwnerToken {
+    accessor_id: usize,
 }
 
 pub struct ChannelReaderToken {
     accessor_id: usize,
 }
 
-impl ChannelReaderToken {
-    pub fn new(accessor_id: usize) -> Self {
+impl ChannelTokenOps for ChannelOwnerToken {
+    fn new(accessor_id: usize) -> Self {
         Self { accessor_id }
     }
 
-    pub fn get_accessor_id(&self) -> usize {
+    fn get_accessor_id(&self) -> usize {
+        self.accessor_id
+    }
+}
+impl ChannelTokenOps for ChannelReaderToken {
+    fn new(accessor_id: usize) -> Self {
+        Self { accessor_id }
+    }
+
+    fn get_accessor_id(&self) -> usize {
         self.accessor_id
     }
 }

@@ -1,3 +1,5 @@
+use crate::channel::token::ChannelTokenOps;
+
 use super::{
     reg::{Reg, RegMutView, RegReadView},
     token::{ChannelOwnerToken, ChannelReaderToken},
@@ -5,7 +7,7 @@ use super::{
 
 struct Channel<'a> {
     pub name: &'a str,
-    pub owner_token_id: usize,
+    pub owner_id: usize,
     pub reg: Reg,
 }
 
@@ -34,29 +36,33 @@ impl<'a, const N: usize> ChannelStore<'a, N> {
         query_result.is_err()
     }
 
-    fn register_channel(&mut self, name: &'a str, reg: Reg) -> (usize, usize) {
+    fn register_channel(&mut self, name: &'a str, owner_id: usize, reg: Reg) -> usize {
         assert!(self.current_size < self.channels.len());
 
-        let owner_token_id = self.current_size;
         let accessor_id = self.current_size;
         self.channels[self.current_size] = Some(Channel {
             name,
-            owner_token_id,
+            owner_id,
             reg,
         });
         self.current_size += 1;
 
-        (owner_token_id, accessor_id)
+        accessor_id
     }
 
-    pub fn register_write_channel(&mut self, name: &'a str, reg: Reg) -> ChannelOwnerToken {
+    pub(self) fn register_write_channel(
+        &mut self,
+        name: &'a str,
+        owner_id: usize,
+        reg: Reg,
+    ) -> ChannelOwnerToken {
         assert!(!self.init_complete);
         assert!(self.is_unique_channel_name(name));
-        let (owner_token_id, accessor_id) = self.register_channel(name, reg);
-        ChannelOwnerToken::new(owner_token_id, accessor_id)
+        let accessor_id = self.register_channel(name, owner_id, reg);
+        ChannelOwnerToken::new(accessor_id)
     }
 
-    pub fn register_read_channel(&self, name: &'a str) -> ChannelReaderToken {
+    pub(self) fn register_read_channel(&self, name: &'a str) -> ChannelReaderToken {
         assert!(!self.init_complete);
         let query_result = self.get_existing_channel_accessor_id(name);
         // TODO handle panic in a better way here.
@@ -106,5 +112,35 @@ impl<'a, const N: usize> RegViewProducer<'a, ChannelReaderToken, RegReadView<'a>
         } else {
             panic!("Invalid accessor token.");
         }
+    }
+}
+
+pub struct ChannelBuilder<const N: usize> {
+    owner_id: usize,
+}
+
+impl<'a, const N: usize> ChannelBuilder<N> {
+    pub(super) fn new(
+        channel_store: &mut ChannelStore<'a, N>,
+        owner_id: usize,
+    ) -> ChannelBuilder<N> {
+        ChannelBuilder { owner_id }
+    }
+
+    pub fn register_write_channel(
+        &mut self,
+        channel_store: &mut ChannelStore<'a, N>,
+        name: &'a str,
+        reg: Reg,
+    ) -> ChannelOwnerToken {
+        channel_store.register_write_channel(name, self.owner_id, reg)
+    }
+
+    pub fn register_read_channel(
+        &self,
+        channel_store: &mut ChannelStore<'a, N>,
+        name: &'a str,
+    ) -> ChannelReaderToken {
+        channel_store.register_read_channel(name)
     }
 }
