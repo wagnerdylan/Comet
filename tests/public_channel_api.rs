@@ -1,6 +1,6 @@
 use comet::channel::{
     reg::{Reg, RegGetter, RegMutView, RegReadView, RegSetter},
-    store::{ChannelBuilder, ChannelStore, RegViewProducer},
+    store::{ChannelReadBuilder, ChannelStore, ChannelWriteBuilder, RegViewProducer},
 };
 
 extern crate comet;
@@ -42,14 +42,14 @@ fn register_api() {
 #[test]
 fn channel_api() {
     let mut channel_store = ChannelStore::default();
-    let mut channel_builder = ChannelBuilder::new(0usize);
+    let mut channel_builder = ChannelWriteBuilder::new(0usize);
 
     let t_1_o = channel_builder.register_write_channel(
         &mut channel_store,
         "test1.test.channel",
         Reg::from(42u32),
     );
-    let read_channel_builder = ChannelBuilder::new(1usize);
+    let read_channel_builder = ChannelReadBuilder::new(1usize);
     let t_1_r =
         read_channel_builder.register_read_channel(&mut channel_store, "test1.test.channel");
     let _t_2_o = channel_builder.register_write_channel(

@@ -104,6 +104,7 @@ pub trait RegViewProducer<'a, T, K> {
 
 impl<'a> RegViewProducer<'a, ChannelOwnerToken, RegMutView<'a>> for ChannelStore<'a> {
     fn grab(&'a self, token: &ChannelOwnerToken) -> RegMutView<'a> {
+        assert!(token.is_valid());
         let accessor_id = token.get_accessor_id();
 
         if let Some(channel) = self.channels.get(accessor_id) {
@@ -116,6 +117,7 @@ impl<'a> RegViewProducer<'a, ChannelOwnerToken, RegMutView<'a>> for ChannelStore
 
 impl<'a> RegViewProducer<'a, ChannelReaderToken, RegReadView<'a>> for ChannelStore<'a> {
     fn grab(&'a self, token: &ChannelReaderToken) -> RegReadView<'a> {
+        assert!(token.is_valid());
         let accessor_id = token.get_accessor_id();
 
         if let Some(channel) = self.channels.get(accessor_id) {
@@ -126,13 +128,13 @@ impl<'a> RegViewProducer<'a, ChannelReaderToken, RegReadView<'a>> for ChannelSto
     }
 }
 
-pub struct ChannelBuilder {
+pub struct ChannelWriteBuilder {
     owner_id: usize,
 }
 
-impl<'a> ChannelBuilder {
-    pub fn new(owner_id: usize) -> ChannelBuilder {
-        ChannelBuilder { owner_id }
+impl<'a> ChannelWriteBuilder {
+    pub fn new(owner_id: usize) -> ChannelWriteBuilder {
+        ChannelWriteBuilder { owner_id }
     }
 
     pub fn register_write_channel(
@@ -142,6 +144,16 @@ impl<'a> ChannelBuilder {
         reg: Reg,
     ) -> ChannelOwnerToken {
         channel_store.register_write_channel(name, self.owner_id, reg)
+    }
+}
+
+pub struct ChannelReadBuilder {
+    owner_id: usize,
+}
+
+impl<'a> ChannelReadBuilder {
+    pub fn new(owner_id: usize) -> ChannelReadBuilder {
+        ChannelReadBuilder { owner_id }
     }
 
     pub fn register_read_channel(
