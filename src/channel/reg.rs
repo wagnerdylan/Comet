@@ -1,22 +1,10 @@
 use core::cell::RefCell;
 
-union RegData {
-    bool: bool,
-    u8: u8,
-    i8: i8,
-    u16: u16,
-    i16: i16,
-    u32: u32,
-    i32: i32,
-    f32: f32,
-    u64: u64,
-    i64: i64,
-    f64: f64,
-}
+use alloc::vec::Vec;
 
 #[derive(Debug, PartialEq)]
 enum RegType {
-    BOOL,
+    BYTES,
     U8,
     I8,
     U16,
@@ -31,7 +19,18 @@ enum RegType {
 
 pub struct Reg {
     reg_type: RegType,
-    data: RefCell<RegData>,
+    data: RefCell<Vec<u8>>,
+}
+
+impl Reg {
+    pub fn get_bytes(&self, out_slice: &mut [u8]) {
+        assert_eq!(self.reg_type, RegType::BYTES);
+        assert!(out_slice.len() <= self.data.borrow().len());
+
+        for (i, byte) in self.data.borrow().iter().enumerate() {
+            out_slice[i] = *byte;
+        }
+    }
 }
 
 pub struct RegReadView<'a> {
@@ -55,7 +54,7 @@ impl<'a> RegMutView<'a> {
 }
 
 pub trait RegSetter<T> {
-    fn set(&self, val: T);
+    fn set(&self, value: T);
 }
 
 pub trait RegGetter<T> {
@@ -63,35 +62,64 @@ pub trait RegGetter<T> {
 }
 
 macro_rules! reg_setter {
-    ($prim_type:ty, $prim_id:ident, $enum_type:expr) => {
+    ($prim_type:ty, $enum_type:expr) => {
         impl RegSetter<$prim_type> for Reg {
-            fn set(&self, val: $prim_type) {
+            fn set(&self, value: $prim_type) {
                 assert_eq!(self.reg_type, $enum_type);
-                self.data.replace(RegData { $prim_id: val });
+                self.data.borrow_mut().clear();
+                self.data
+                    .borrow_mut()
+                    .extend_from_slice(&value.to_ne_bytes());
             }
         }
     };
 }
 
+impl RegSetter<&[u8]> for Reg {
+    fn set(&self, value: &[u8]) {
+        assert_eq!(self.reg_type, RegType::BYTES);
+        self.data.borrow_mut().clear();
+        self.data.borrow_mut().extend_from_slice(value);
+    }
+}
+
 macro_rules! reg_from_type {
-    ($prim_type:ty, $prim_id:ident, $enum_type:expr) => {
+    ($prim_type:ty, $enum_type:expr) => {
         impl From<$prim_type> for Reg {
             fn from(value: $prim_type) -> Self {
+                let data = value.to_ne_bytes();
+                let mut data_vec = Vec::with_capacity(data.len());
+                data_vec.extend_from_slice(&data);
                 Reg {
                     reg_type: $enum_type,
-                    data: RefCell::new(RegData { $prim_id: value }),
+                    data: RefCell::new(data_vec),
                 }
             }
         }
     };
 }
 
+impl From<&[u8]> for Reg {
+    fn from(value: &[u8]) -> Self {
+        let mut data_vec = Vec::with_capacity(value.len());
+        data_vec.extend_from_slice(value);
+        Reg {
+            reg_type: RegType::BYTES,
+            data: RefCell::new(data_vec),
+        }
+    }
+}
+
 macro_rules! reg_getter {
-    ($prim_type:ty, $prim_id:ident, $enum_type:expr) => {
+    ($prim_type:ty, $enum_type:expr, $num_bytes:expr) => {
         impl RegGetter<$prim_type> for Reg {
             fn get(&self) -> $prim_type {
                 assert_eq!(self.reg_type, $enum_type);
-                unsafe { self.data.borrow().$prim_id }
+                let mut data_bytes: [u8; $num_bytes] = [0; $num_bytes];
+                for (i, byte) in self.data.borrow().iter().enumerate() {
+                    data_bytes[i] = *byte;
+                }
+                <$prim_type>::from_ne_bytes(data_bytes)
             }
         }
     };
@@ -117,79 +145,72 @@ macro_rules! reg_view_setter {
     };
 }
 
-reg_setter!(bool, bool, RegType::BOOL);
-reg_from_type!(bool, bool, RegType::BOOL);
-reg_getter!(bool, bool, RegType::BOOL);
-reg_view_getter!(bool, RegReadView);
-reg_view_getter!(bool, RegMutView);
-reg_view_setter!(bool, RegMutView);
-
-reg_setter!(u8, u8, RegType::U8);
-reg_from_type!(u8, u8, RegType::U8);
-reg_getter!(u8, u8, RegType::U8);
+reg_setter!(u8, RegType::U8);
+reg_from_type!(u8, RegType::U8);
+reg_getter!(u8, RegType::U8, 1);
 reg_view_getter!(u8, RegReadView);
 reg_view_getter!(u8, RegMutView);
 reg_view_setter!(u8, RegMutView);
 
-reg_setter!(i8, i8, RegType::I8);
-reg_from_type!(i8, i8, RegType::I8);
-reg_getter!(i8, i8, RegType::I8);
+reg_setter!(i8, RegType::I8);
+reg_from_type!(i8, RegType::I8);
+reg_getter!(i8, RegType::I8, 1);
 reg_view_getter!(i8, RegReadView);
 reg_view_getter!(i8, RegMutView);
 reg_view_setter!(i8, RegMutView);
 
-reg_setter!(u16, u16, RegType::U16);
-reg_from_type!(u16, u16, RegType::U16);
-reg_getter!(u16, u16, RegType::U16);
+reg_setter!(u16, RegType::U16);
+reg_from_type!(u16, RegType::U16);
+reg_getter!(u16, RegType::U16, 2);
 reg_view_getter!(u16, RegReadView);
 reg_view_getter!(u16, RegMutView);
 reg_view_setter!(u16, RegMutView);
 
-reg_setter!(i16, i16, RegType::I16);
-reg_from_type!(i16, i16, RegType::I16);
-reg_getter!(i16, i16, RegType::I16);
+reg_setter!(i16, RegType::I16);
+reg_from_type!(i16, RegType::I16);
+reg_getter!(i16, RegType::I16, 2);
 reg_view_getter!(i16, RegReadView);
 reg_view_getter!(i16, RegMutView);
 reg_view_setter!(i16, RegMutView);
 
-reg_setter!(u32, u32, RegType::U32);
-reg_from_type!(u32, u32, RegType::U32);
-reg_getter!(u32, u32, RegType::U32);
+reg_setter!(u32, RegType::U32);
+reg_from_type!(u32, RegType::U32);
+reg_getter!(u32, RegType::U32, 4);
 reg_view_getter!(u32, RegReadView);
 reg_view_getter!(u32, RegMutView);
 reg_view_setter!(u32, RegMutView);
 
-reg_setter!(i32, i32, RegType::I32);
-reg_from_type!(i32, i32, RegType::I32);
-reg_getter!(i32, i32, RegType::I32);
+reg_setter!(i32, RegType::I32);
+reg_from_type!(i32, RegType::I32);
+reg_getter!(i32, RegType::I32, 4);
 reg_view_getter!(i32, RegReadView);
 reg_view_getter!(i32, RegMutView);
 reg_view_setter!(i32, RegMutView);
 
-reg_setter!(f32, f32, RegType::F32);
-reg_from_type!(f32, f32, RegType::F32);
-reg_getter!(f32, f32, RegType::F32);
+reg_setter!(f32, RegType::F32);
+reg_from_type!(f32, RegType::F32);
+reg_getter!(f32, RegType::F32, 4);
 reg_view_getter!(f32, RegReadView);
 reg_view_getter!(f32, RegMutView);
 reg_view_setter!(f32, RegMutView);
 
-reg_setter!(u64, u64, RegType::U64);
-reg_from_type!(u64, u64, RegType::U64);
-reg_getter!(u64, u64, RegType::U64);
+reg_setter!(u64, RegType::U64);
+reg_from_type!(u64, RegType::U64);
+reg_getter!(u64, RegType::U64, 8);
 reg_view_getter!(u64, RegReadView);
 reg_view_getter!(u64, RegMutView);
 reg_view_setter!(u64, RegMutView);
 
-reg_setter!(i64, i64, RegType::I64);
-reg_from_type!(i64, i64, RegType::I64);
-reg_getter!(i64, i64, RegType::I64);
+reg_setter!(i64, RegType::I64);
+reg_from_type!(i64, RegType::I64);
+reg_getter!(i64, RegType::I64, 8);
 reg_view_getter!(i64, RegReadView);
 reg_view_getter!(i64, RegMutView);
 reg_view_setter!(i64, RegMutView);
 
-reg_setter!(f64, f64, RegType::F64);
-reg_from_type!(f64, f64, RegType::F64);
-reg_getter!(f64, f64, RegType::F64);
+reg_setter!(f64, RegType::F64);
+reg_from_type!(f64, RegType::F64);
+reg_getter!(f64, RegType::F64, 8);
 reg_view_getter!(f64, RegReadView);
 reg_view_getter!(f64, RegMutView);
 reg_view_setter!(f64, RegMutView);
