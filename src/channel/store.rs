@@ -13,14 +13,34 @@ struct Channel<'a> {
     pub reg: Reg,
 }
 
+#[derive(PartialEq)]
+struct NodeDependency {
+    pub owner: usize,
+    pub consumer: usize,
+}
+
+#[derive(Default)]
+struct NodeGraph {
+    pub(super) mappings: Vec<NodeDependency>,
+}
+
+impl NodeGraph {
+    pub(self) fn insert_node_dependency(&mut self, node_dep: NodeDependency) {
+        if !self.mappings.contains(&node_dep) {
+            self.mappings.push(node_dep);
+        }
+    }
+}
+
 #[derive(Default)]
 pub struct ChannelStore<'a> {
     channels: Vec<Channel<'a>>,
+    node_graph: NodeGraph,
     init_complete: bool,
 }
 
 impl<'a> ChannelStore<'a> {
-    fn get_existing_channel_accessor_id(&self, name: &'a str) -> Result<usize, ()> {
+    fn get_existing_channel_idx(&self, name: &'a str) -> Result<usize, ()> {
         for (i, channel) in self.channels.iter().enumerate() {
             if channel.name == name {
                 return Ok(i);
@@ -31,7 +51,7 @@ impl<'a> ChannelStore<'a> {
     }
 
     fn is_unique_channel_name(&self, name: &'a str) -> bool {
-        let query_result = self.get_existing_channel_accessor_id(name);
+        let query_result = self.get_existing_channel_idx(name);
 
         query_result.is_err()
     }
@@ -59,12 +79,23 @@ impl<'a> ChannelStore<'a> {
         ChannelOwnerToken::new(accessor_id)
     }
 
-    pub(self) fn register_read_channel(&self, name: &'a str) -> ChannelReaderToken {
+    pub(self) fn register_read_channel(
+        &mut self,
+        name: &'a str,
+        read_owner_id: usize,
+    ) -> ChannelReaderToken {
         assert!(!self.init_complete);
-        let query_result = self.get_existing_channel_accessor_id(name);
+        let query_result = self.get_existing_channel_idx(name);
         // TODO handle panic in a better way here.
-        let accessor_id = query_result.unwrap();
-        ChannelReaderToken::new(accessor_id)
+        let accessor_idx = query_result.unwrap();
+        // Associate the consumer (caller) with the owner of the channel for generating the execution ordering of components.
+        let channel_owner_id = self.channels.get(accessor_idx).unwrap().owner_id;
+        self.node_graph.insert_node_dependency(NodeDependency {
+            owner: channel_owner_id,
+            consumer: read_owner_id,
+        });
+
+        ChannelReaderToken::new(accessor_idx)
     }
 }
 
@@ -119,6 +150,6 @@ impl<'a> ChannelBuilder {
         channel_store: &mut ChannelStore<'a>,
         name: &'a str,
     ) -> ChannelReaderToken {
-        channel_store.register_read_channel(name)
+        channel_store.register_read_channel(name, self.owner_id)
     }
 }
