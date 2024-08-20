@@ -1,6 +1,9 @@
 use alloc::{boxed::Box, vec::Vec};
 
-use crate::channel::store::{ChannelReadBuilder, ChannelStore, ChannelWriteBuilder};
+use crate::{
+    channel::store::{ChannelReadBuilder, ChannelStore, ChannelWriteBuilder},
+    system::order::NodeOrderCalc,
+};
 
 use super::component::{Component, ComponentHolder};
 
@@ -43,6 +46,10 @@ impl<'a> Runner<'a> {
         }
 
         // TODO set execution order.
+        let node_order_data = NodeOrderCalc::new(
+            self.channel_store.node_graph.take().unwrap(),
+            &self.components,
+        );
 
         self.init_complete = true;
     }

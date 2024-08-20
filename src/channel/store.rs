@@ -1,6 +1,9 @@
 use alloc::vec::Vec;
 
-use crate::channel::token::ChannelTokenOps;
+use crate::{
+    channel::token::ChannelTokenOps,
+    system::order::{NodeDependency, NodeGraph},
+};
 
 use super::{
     reg::{Reg, RegMutView, RegReadView},
@@ -13,30 +16,18 @@ struct Channel<'a> {
     pub reg: Reg,
 }
 
-#[derive(PartialEq)]
-struct NodeDependency {
-    pub owner: usize,
-    pub consumer: usize,
-}
-
-#[derive(Default)]
-struct NodeGraph {
-    pub(super) mappings: Vec<NodeDependency>,
-}
-
-impl NodeGraph {
-    pub(self) fn insert_node_dependency(&mut self, node_dep: NodeDependency) {
-        assert_ne!(node_dep.owner, node_dep.consumer);
-        if !self.mappings.contains(&node_dep) {
-            self.mappings.push(node_dep);
-        }
-    }
-}
-
-#[derive(Default)]
 pub struct ChannelStore<'a> {
     channels: Vec<Channel<'a>>,
-    node_graph: NodeGraph,
+    pub(crate) node_graph: Option<NodeGraph>,
+}
+
+impl<'a> Default for ChannelStore<'a> {
+    fn default() -> Self {
+        Self {
+            channels: Vec::default(),
+            node_graph: Some(NodeGraph::default()),
+        }
+    }
 }
 
 impl<'a> ChannelStore<'a> {
@@ -89,10 +80,14 @@ impl<'a> ChannelStore<'a> {
         let accessor_idx = query_result.unwrap();
         // Associate the consumer (caller) with the owner of the channel for generating the execution ordering of components.
         let channel_owner_id = self.channels.get(accessor_idx).unwrap().owner_id;
-        self.node_graph.insert_node_dependency(NodeDependency {
-            owner: channel_owner_id,
-            consumer: read_owner_id,
-        });
+        // Unchecked call to unwrap() is okay here as register calls are only allowed when node_graph is Some().
+        self.node_graph
+            .as_mut()
+            .unwrap()
+            .insert_node_dependency(NodeDependency {
+                owner: channel_owner_id,
+                consumer: read_owner_id,
+            });
 
         ChannelReaderToken::new(accessor_idx)
     }
@@ -167,14 +162,12 @@ impl<'a> ChannelReadBuilder {
 
 #[cfg(test)]
 mod unit_tests {
-    use alloc::vec::Vec;
-
     use crate::channel::{
         reg::{Reg, RegGetter},
         token::ChannelTokenOps,
     };
 
-    use super::{ChannelStore, NodeDependency, NodeGraph, RegViewProducer};
+    use super::{ChannelStore, RegViewProducer};
 
     #[test]
     fn test_register_write_channel() {
@@ -263,31 +256,5 @@ mod unit_tests {
 
         let _test1_read_token =
             channel_store.register_read_channel("test2.test.channel", test_owner_id);
-    }
-
-    #[test]
-    #[should_panic(expected = "assertion `left != right` failed")]
-    fn test_node_graph() {
-        let mut node_graph = NodeGraph {
-            mappings: Vec::new(),
-        };
-        assert_eq!(node_graph.mappings.len(), 0);
-
-        node_graph.insert_node_dependency(NodeDependency {
-            owner: 1,
-            consumer: 2,
-        });
-        assert_eq!(node_graph.mappings.len(), 1);
-
-        node_graph.insert_node_dependency(NodeDependency {
-            owner: 1,
-            consumer: 2,
-        });
-        assert_eq!(node_graph.mappings.len(), 1);
-
-        node_graph.insert_node_dependency(NodeDependency {
-            owner: 1,
-            consumer: 1,
-        });
     }
 }
