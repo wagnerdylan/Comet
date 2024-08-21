@@ -5,7 +5,10 @@ use crate::{
     system::order::NodeOrderCalc,
 };
 
-use super::component::{Component, ComponentHolder};
+use super::{
+    component::{self, Component, ComponentHolder},
+    order,
+};
 
 #[derive(Default)]
 pub struct Runner<'a> {
@@ -45,11 +48,14 @@ impl<'a> Runner<'a> {
                 .register_read_channels(read_builder, &mut self.channel_store);
         }
 
-        // TODO set execution order.
-        let node_order_data = NodeOrderCalc::new(
+        // Calculate and modify execution order of the inserted components to create an
+        // execution topological sequence.
+        let mut node_order_data = NodeOrderCalc::new(
             self.channel_store.node_graph.take().unwrap(),
             &self.components,
         );
+        let ordering = node_order_data.calculate_topological_order();
+        self.modify_component_ordering(ordering);
 
         self.init_complete = true;
     }
@@ -59,6 +65,20 @@ impl<'a> Runner<'a> {
 
         for component_holder in self.components.iter_mut() {
             component_holder.component.dispatch(&self.channel_store);
+        }
+    }
+
+    fn modify_component_ordering(&mut self, ordering: Vec<usize>) {
+        for (insert_idx, component_id) in ordering.iter().enumerate() {
+            let component_idx = self
+                .components
+                .iter()
+                .enumerate()
+                .find(|(_, comp_holder)| comp_holder.id == *component_id)
+                .unwrap()
+                .0;
+            let component = self.components.remove(component_idx);
+            self.components.insert(insert_idx, component);
         }
     }
 }

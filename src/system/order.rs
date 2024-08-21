@@ -54,6 +54,66 @@ impl NodeOrderCalc {
             node_markers,
         }
     }
+
+    fn visit_node(&mut self, curr_marker_idx: usize, ordering: &mut Vec<usize>) {
+        let curr_marker_id = {
+            let curr_marker = self.node_markers.get_mut(curr_marker_idx).unwrap();
+
+            if curr_marker.perm_marker {
+                return;
+            }
+            if curr_marker.temp_marker {
+                panic!("Cycle detected in execution order, TODO provide info on how to fix this.")
+            }
+            curr_marker.temp_marker = true;
+
+            curr_marker.node_id
+        };
+
+        let consumers: Vec<usize> = self
+            .node_graph
+            .mappings
+            .iter()
+            .filter(|x| x.owner == curr_marker_id)
+            .map(|x| x.consumer)
+            .collect();
+        for consumer_id in consumers {
+            let rec_marker_idx = self
+                .node_markers
+                .iter()
+                .enumerate()
+                .find(|(_, marker)| consumer_id == marker.node_id)
+                .unwrap()
+                .0;
+            self.visit_node(rec_marker_idx, ordering)
+        }
+
+        {
+            let curr_marker = self.node_markers.get_mut(curr_marker_idx).unwrap();
+
+            curr_marker.temp_marker = false;
+            curr_marker.perm_marker = true;
+        };
+
+        ordering.insert(0, curr_marker_id);
+    }
+
+    pub(crate) fn calculate_topological_order(&mut self) -> Vec<usize> {
+        let mut ordering: Vec<usize> = Vec::new();
+
+        while self.node_markers.iter().any(|x| !x.perm_marker) {
+            let select_marker_idx = self
+                .node_markers
+                .iter()
+                .enumerate()
+                .find(|(_, marker)| !marker.perm_marker)
+                .unwrap()
+                .0;
+            self.visit_node(select_marker_idx, &mut ordering);
+        }
+
+        ordering
+    }
 }
 
 #[cfg(test)]

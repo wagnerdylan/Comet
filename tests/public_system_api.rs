@@ -89,8 +89,8 @@ fn runnner_api() {
 
     let mut runner = Runner::default();
 
-    runner.add_component(Box::new(producer_42));
     runner.add_component(Box::new(adder));
+    runner.add_component(Box::new(producer_42));
 
     runner.initialize();
 
