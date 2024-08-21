@@ -1,2 +1,2 @@
-# Comet
-Comet is a task execution framework written in Rust designed for real-time autonomous systems.
+![Comet Logo](/meta/comet_logo.png)\
+Comet is a lightweight task execution framework written in Rust designed for real-time autonomous systems.
