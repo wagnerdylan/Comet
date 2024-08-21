@@ -1,6 +1,6 @@
 use alloc::vec::Vec;
 
-use super::component::{self, ComponentHolder};
+use super::component::ComponentHolder;
 
 #[derive(PartialEq)]
 pub(crate) struct NodeDependency {
@@ -34,7 +34,7 @@ pub(crate) struct NodeOrderCalc {
 }
 
 impl NodeOrderCalc {
-    fn build_node_markers(components: &Vec<ComponentHolder>) -> Vec<NodeMarker> {
+    fn build_node_markers(components: &[ComponentHolder]) -> Vec<NodeMarker> {
         let mut node_markers: Vec<NodeMarker> = Vec::new();
         for component in components.iter() {
             node_markers.push(NodeMarker {
@@ -47,7 +47,7 @@ impl NodeOrderCalc {
         node_markers
     }
 
-    pub(crate) fn new(node_graph: NodeGraph, components: &Vec<ComponentHolder>) -> Self {
+    pub(super) fn new(node_graph: NodeGraph, components: &[ComponentHolder]) -> Self {
         let node_markers = Self::build_node_markers(components);
         Self {
             node_graph,

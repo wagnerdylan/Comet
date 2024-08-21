@@ -5,10 +5,7 @@ use crate::{
     system::order::NodeOrderCalc,
 };
 
-use super::{
-    component::{self, Component, ComponentHolder},
-    order,
-};
+use super::component::{Component, ComponentHolder};
 
 #[derive(Default)]
 pub struct Runner<'a> {

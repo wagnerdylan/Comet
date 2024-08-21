@@ -4,7 +4,7 @@ use alloc::vec::Vec;
 
 #[derive(Debug, PartialEq)]
 enum RegType {
-    BYTES,
+    Bytes,
     U8,
     I8,
     U16,
@@ -24,7 +24,7 @@ pub struct Reg {
 
 impl Reg {
     pub fn get_bytes(&self, out_slice: &mut [u8]) {
-        assert_eq!(self.reg_type, RegType::BYTES);
+        assert_eq!(self.reg_type, RegType::Bytes);
         assert!(out_slice.len() <= self.data.borrow().len());
 
         for (i, byte) in self.data.borrow().iter().enumerate() {
@@ -77,7 +77,7 @@ macro_rules! reg_setter {
 
 impl RegSetter<&[u8]> for Reg {
     fn set(&self, value: &[u8]) {
-        assert_eq!(self.reg_type, RegType::BYTES);
+        assert_eq!(self.reg_type, RegType::Bytes);
         self.data.borrow_mut().clear();
         self.data.borrow_mut().extend_from_slice(value);
     }
@@ -104,7 +104,7 @@ impl From<&[u8]> for Reg {
         let mut data_vec = Vec::with_capacity(value.len());
         data_vec.extend_from_slice(value);
         Reg {
-            reg_type: RegType::BYTES,
+            reg_type: RegType::Bytes,
             data: RefCell::new(data_vec),
         }
     }

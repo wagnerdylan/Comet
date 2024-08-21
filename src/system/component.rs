@@ -5,14 +5,14 @@ use crate::channel::store::{ChannelReadBuilder, ChannelStore, ChannelWriteBuilde
 pub trait Component {
     fn register_write_channels(
         &mut self,
-        channel_builder: ChannelWriteBuilder,
-        channel_store: &mut ChannelStore,
+        _channel_builder: ChannelWriteBuilder,
+        _channel_store: &mut ChannelStore,
     ) {
     }
     fn register_read_channels(
         &mut self,
-        channel_builder: ChannelReadBuilder,
-        channel_store: &mut ChannelStore,
+        _channel_builder: ChannelReadBuilder,
+        _channel_store: &mut ChannelStore,
     ) {
     }
     fn dispatch(&mut self, channel_store: &ChannelStore);
