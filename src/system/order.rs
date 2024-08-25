@@ -63,7 +63,7 @@ impl NodeOrderCalc {
                 return;
             }
             if curr_marker.temp_marker {
-                panic!("Cycle detected in execution order, TODO provide info on how to fix this.")
+                panic!("Cycle detected in execution order.")
             }
             curr_marker.temp_marker = true;
 
@@ -118,7 +118,19 @@ impl NodeOrderCalc {
 
 #[cfg(test)]
 mod unit_tests {
-    use crate::system::order::{NodeDependency, NodeGraph};
+    use alloc::{boxed::Box, vec::Vec};
+
+    use crate::system::{
+        component::{Component, ComponentHolder},
+        order::{NodeDependency, NodeGraph},
+    };
+
+    use super::NodeOrderCalc;
+
+    struct TestComponent();
+    impl Component for TestComponent {
+        fn dispatch(&mut self, _channel_store: &crate::channel::store::ChannelStore) {}
+    }
 
     #[test]
     #[should_panic(expected = "assertion `left != right` failed")]
@@ -142,5 +154,112 @@ mod unit_tests {
             owner: 1,
             consumer: 1,
         });
+    }
+
+    #[test]
+    fn test_build_node_markers() {
+        let holders = [
+            ComponentHolder {
+                component: Box::new(TestComponent {}),
+                id: 0,
+            },
+            ComponentHolder {
+                component: Box::new(TestComponent {}),
+                id: 1,
+            },
+            ComponentHolder {
+                component: Box::new(TestComponent {}),
+                id: 2,
+            },
+        ];
+
+        let node_markers = NodeOrderCalc::build_node_markers(&holders);
+
+        assert_eq!(node_markers.first().unwrap().node_id, 0);
+        assert_eq!(node_markers.get(1).unwrap().node_id, 1);
+        assert_eq!(node_markers.last().unwrap().node_id, 2);
+
+        for node_marker in node_markers.iter() {
+            assert!(!node_marker.perm_marker);
+            assert!(!node_marker.temp_marker);
+        }
+    }
+
+    #[test]
+    fn test_order() {
+        let holders = [
+            ComponentHolder {
+                component: Box::new(TestComponent {}),
+                id: 0,
+            },
+            ComponentHolder {
+                component: Box::new(TestComponent {}),
+                id: 1,
+            },
+            ComponentHolder {
+                component: Box::new(TestComponent {}),
+                id: 2,
+            },
+        ];
+
+        let mut node_graph = NodeGraph::default();
+        assert_eq!(node_graph.mappings.len(), 0);
+
+        node_graph.insert_node_dependency(NodeDependency {
+            owner: 1,
+            consumer: 2,
+        });
+        node_graph.insert_node_dependency(NodeDependency {
+            owner: 1,
+            consumer: 0,
+        });
+        node_graph.insert_node_dependency(NodeDependency {
+            owner: 1,
+            consumer: 2,
+        });
+
+        let mut order_calc = NodeOrderCalc::new(node_graph, &holders);
+        let ordering = order_calc.calculate_topological_order();
+
+        assert_eq!(ordering, Vec::from([1, 2, 0]));
+    }
+
+    #[test]
+    #[should_panic(expected = "Cycle detected in execution order.")]
+    fn test_order_cycle() {
+        let holders = [
+            ComponentHolder {
+                component: Box::new(TestComponent {}),
+                id: 0,
+            },
+            ComponentHolder {
+                component: Box::new(TestComponent {}),
+                id: 1,
+            },
+            ComponentHolder {
+                component: Box::new(TestComponent {}),
+                id: 2,
+            },
+        ];
+
+        let mut node_graph = NodeGraph::default();
+        assert_eq!(node_graph.mappings.len(), 0);
+
+        node_graph.insert_node_dependency(NodeDependency {
+            owner: 0,
+            consumer: 1,
+        });
+        node_graph.insert_node_dependency(NodeDependency {
+            owner: 1,
+            consumer: 2,
+        });
+        node_graph.insert_node_dependency(NodeDependency {
+            owner: 2,
+            consumer: 0,
+        });
+
+        let mut order_calc = NodeOrderCalc::new(node_graph, &holders);
+        // This should fail on dep cycle check.
+        let _ordering = order_calc.calculate_topological_order();
     }
 }
