@@ -79,3 +79,65 @@ impl<'a> Runner<'a> {
         }
     }
 }
+
+#[cfg(test)]
+mod unit_tests {
+    use alloc::{boxed::Box, vec::Vec};
+
+    use crate::system::component::Component;
+
+    use super::Runner;
+
+    struct TestComponent();
+    impl Component for TestComponent {
+        fn dispatch(&mut self, _channel_store: &crate::channel::store::ChannelStore) {}
+    }
+
+    #[test]
+    fn test_runner_insertion() {
+        let mut runner = Runner::default();
+        runner.add_component(Box::new(TestComponent()));
+        runner.add_component(Box::new(TestComponent()));
+        runner.add_component(Box::new(TestComponent()));
+        runner.add_component(Box::new(TestComponent()));
+
+        assert_eq!(runner.components.len(), 4);
+        assert_eq!(runner.components.first().unwrap().id, 0);
+        assert_eq!(runner.components.get(1).unwrap().id, 1);
+        assert_eq!(runner.components.get(2).unwrap().id, 2);
+        assert_eq!(runner.components.last().unwrap().id, 3);
+    }
+
+    #[test]
+    #[should_panic(expected = "assertion failed: self.init_complete")]
+    fn test_init_not_complete() {
+        let mut runner = Runner::default();
+        runner.dispatch_components();
+    }
+
+    #[test]
+    fn test_modify_component_ordering() {
+        let mut runner = Runner::default();
+        runner.add_component(Box::new(TestComponent()));
+        runner.add_component(Box::new(TestComponent()));
+        runner.add_component(Box::new(TestComponent()));
+        runner.add_component(Box::new(TestComponent()));
+
+        runner.modify_component_ordering(Vec::from([3usize, 2, 1, 0]));
+
+        assert_eq!(runner.components.len(), 4);
+        assert_eq!(runner.components.first().unwrap().id, 3);
+        assert_eq!(runner.components.get(1).unwrap().id, 2);
+        assert_eq!(runner.components.get(2).unwrap().id, 1);
+        assert_eq!(runner.components.last().unwrap().id, 0);
+    }
+
+    #[test]
+    fn test_init() {
+        let mut runner = Runner::default();
+        runner.add_component(Box::new(TestComponent()));
+        runner.add_component(Box::new(TestComponent()));
+        runner.add_component(Box::new(TestComponent()));
+        runner.add_component(Box::new(TestComponent()));
+    }
+}
