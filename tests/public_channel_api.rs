@@ -46,15 +46,15 @@ fn channel_api() {
 
     let t_1_o = channel_builder.register_write_channel(
         &mut channel_store,
-        "test1.test.channel",
+        "test1.test.channel".to_string(),
         Reg::from(42u32),
     );
     let read_channel_builder = ChannelReadBuilder::new(1usize);
-    let t_1_r =
-        read_channel_builder.register_read_channel(&mut channel_store, "test1.test.channel");
+    let t_1_r = read_channel_builder
+        .register_read_channel(&mut channel_store, "test1.test.channel".to_string());
     let _t_2_o = channel_builder.register_write_channel(
         &mut channel_store,
-        "test2.test.channel",
+        "test2.test.channel".to_string(),
         Reg::from(9000.0f64),
     );
 

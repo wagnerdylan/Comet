@@ -8,14 +8,14 @@ use crate::{
 use super::component::{Component, ComponentHolder};
 
 #[derive(Default)]
-pub struct Runner<'a> {
+pub struct Runner {
     components: Vec<ComponentHolder>,
-    channel_store: ChannelStore<'a>,
+    channel_store: ChannelStore,
     component_counter: usize,
     init_complete: bool,
 }
 
-impl<'a> Runner<'a> {
+impl Runner {
     pub fn add_component(&mut self, component: Box<dyn Component>) {
         assert!(!self.init_complete);
         self.components.push(ComponentHolder {

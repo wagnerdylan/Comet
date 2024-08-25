@@ -1,4 +1,4 @@
-use alloc::vec::Vec;
+use alloc::{string::String, vec::Vec};
 
 use crate::{
     channel::token::ChannelTokenOps,
@@ -10,18 +10,18 @@ use super::{
     token::{ChannelOwnerToken, ChannelReaderToken},
 };
 
-struct Channel<'a> {
-    pub name: &'a str,
+struct Channel {
+    pub name: String,
     pub owner_id: usize,
     pub reg: Reg,
 }
 
-pub struct ChannelStore<'a> {
-    channels: Vec<Channel<'a>>,
+pub struct ChannelStore {
+    channels: Vec<Channel>,
     pub(crate) node_graph: Option<NodeGraph>,
 }
 
-impl<'a> Default for ChannelStore<'a> {
+impl Default for ChannelStore {
     fn default() -> Self {
         Self {
             channels: Vec::default(),
@@ -30,8 +30,8 @@ impl<'a> Default for ChannelStore<'a> {
     }
 }
 
-impl<'a> ChannelStore<'a> {
-    fn get_existing_channel_idx(&self, name: &'a str) -> Result<usize, ()> {
+impl ChannelStore {
+    fn get_existing_channel_idx(&self, name: &str) -> Result<usize, ()> {
         for (i, channel) in self.channels.iter().enumerate() {
             if channel.name == name {
                 return Ok(i);
@@ -41,13 +41,13 @@ impl<'a> ChannelStore<'a> {
         Err(())
     }
 
-    fn is_unique_channel_name(&self, name: &'a str) -> bool {
+    fn is_unique_channel_name(&self, name: &str) -> bool {
         let query_result = self.get_existing_channel_idx(name);
 
         query_result.is_err()
     }
 
-    fn register_channel(&mut self, name: &'a str, owner_id: usize, reg: Reg) -> usize {
+    fn register_channel(&mut self, name: String, owner_id: usize, reg: Reg) -> usize {
         let accessor_id = self.channels.len();
         self.channels.push(Channel {
             name,
@@ -60,11 +60,11 @@ impl<'a> ChannelStore<'a> {
 
     pub(self) fn register_write_channel(
         &mut self,
-        name: &'a str,
+        name: String,
         owner_id: usize,
         reg: Reg,
     ) -> ChannelOwnerToken {
-        assert!(self.is_unique_channel_name(name));
+        assert!(self.is_unique_channel_name(name.as_str()));
         assert!(!name.is_empty());
         let accessor_id = self.register_channel(name, owner_id, reg);
         ChannelOwnerToken::new(accessor_id)
@@ -72,10 +72,10 @@ impl<'a> ChannelStore<'a> {
 
     pub(self) fn register_read_channel(
         &mut self,
-        name: &'a str,
+        name: String,
         read_owner_id: usize,
     ) -> ChannelReaderToken {
-        let query_result = self.get_existing_channel_idx(name);
+        let query_result = self.get_existing_channel_idx(name.as_str());
         // TODO handle panic in a better way here.
         let accessor_idx = query_result.unwrap();
         // Associate the consumer (caller) with the owner of the channel for generating the execution ordering of components.
@@ -97,7 +97,7 @@ pub trait RegViewProducer<'a, T, K> {
     fn grab(&'a self, token: &T) -> K;
 }
 
-impl<'a> RegViewProducer<'a, ChannelOwnerToken, RegMutView<'a>> for ChannelStore<'a> {
+impl<'a> RegViewProducer<'a, ChannelOwnerToken, RegMutView<'a>> for ChannelStore {
     fn grab(&'a self, token: &ChannelOwnerToken) -> RegMutView<'a> {
         assert!(token.is_valid());
         let accessor_id = token.get_accessor_id();
@@ -110,7 +110,7 @@ impl<'a> RegViewProducer<'a, ChannelOwnerToken, RegMutView<'a>> for ChannelStore
     }
 }
 
-impl<'a> RegViewProducer<'a, ChannelReaderToken, RegReadView<'a>> for ChannelStore<'a> {
+impl<'a> RegViewProducer<'a, ChannelReaderToken, RegReadView<'a>> for ChannelStore {
     fn grab(&'a self, token: &ChannelReaderToken) -> RegReadView<'a> {
         assert!(token.is_valid());
         let accessor_id = token.get_accessor_id();
@@ -127,15 +127,15 @@ pub struct ChannelWriteBuilder {
     owner_id: usize,
 }
 
-impl<'a> ChannelWriteBuilder {
+impl ChannelWriteBuilder {
     pub fn new(owner_id: usize) -> ChannelWriteBuilder {
         ChannelWriteBuilder { owner_id }
     }
 
     pub fn register_write_channel(
         &mut self,
-        channel_store: &mut ChannelStore<'a>,
-        name: &'a str,
+        channel_store: &mut ChannelStore,
+        name: String,
         reg: Reg,
     ) -> ChannelOwnerToken {
         channel_store.register_write_channel(name, self.owner_id, reg)
@@ -146,15 +146,15 @@ pub struct ChannelReadBuilder {
     owner_id: usize,
 }
 
-impl<'a> ChannelReadBuilder {
+impl ChannelReadBuilder {
     pub fn new(owner_id: usize) -> ChannelReadBuilder {
         ChannelReadBuilder { owner_id }
     }
 
     pub fn register_read_channel(
         &self,
-        channel_store: &mut ChannelStore<'a>,
-        name: &'a str,
+        channel_store: &mut ChannelStore,
+        name: String,
     ) -> ChannelReaderToken {
         channel_store.register_read_channel(name, self.owner_id)
     }
@@ -162,6 +162,8 @@ impl<'a> ChannelReadBuilder {
 
 #[cfg(test)]
 mod unit_tests {
+    use alloc::string::ToString;
+
     use crate::channel::{
         reg::{Reg, RegGetter},
         token::ChannelTokenOps,
@@ -174,14 +176,17 @@ mod unit_tests {
         let mut channel_store = ChannelStore::default();
         let test1_channel_name = "test1.test.channel";
         let test_owner_id = 1usize;
-        let token_test1 =
-            channel_store.register_write_channel(test1_channel_name, test_owner_id, Reg::from(8u8));
+        let token_test1 = channel_store.register_write_channel(
+            test1_channel_name.to_string(),
+            test_owner_id,
+            Reg::from(8u8),
+        );
 
         assert_eq!(token_test1.get_accessor_id(), 0);
 
         let test2_channel_name = "test2.test.channel";
         let token_test2 = channel_store.register_write_channel(
-            test2_channel_name,
+            test2_channel_name.to_string(),
             test_owner_id,
             Reg::from(10u8),
         );
@@ -195,17 +200,20 @@ mod unit_tests {
     }
 
     #[test]
-    #[should_panic(expected = "assertion failed: self.is_unique_channel_name(name)")]
+    #[should_panic(expected = "assertion failed: self.is_unique_channel_name(name.as_str())")]
     fn test_duplicate_register_write_channel() {
         let mut channel_store = ChannelStore::default();
         let test1_channel_name = "test1.test.channel";
         let test_owner_id = 1usize;
-        let token_test1 =
-            channel_store.register_write_channel(test1_channel_name, test_owner_id, Reg::from(8u8));
+        let token_test1 = channel_store.register_write_channel(
+            test1_channel_name.to_string(),
+            test_owner_id,
+            Reg::from(8u8),
+        );
 
         assert_eq!(token_test1.get_accessor_id(), 0);
         let _token_test2 = channel_store.register_write_channel(
-            test1_channel_name,
+            test1_channel_name.to_string(),
             test_owner_id,
             Reg::from(10u8),
         );
@@ -217,8 +225,11 @@ mod unit_tests {
         let mut channel_store = ChannelStore::default();
         let test1_channel_name = "";
         let test_owner_id = 1usize;
-        let _token_test1 =
-            channel_store.register_write_channel(test1_channel_name, test_owner_id, Reg::from(8u8));
+        let _token_test1 = channel_store.register_write_channel(
+            test1_channel_name.to_string(),
+            test_owner_id,
+            Reg::from(8u8),
+        );
     }
 
     #[test]
@@ -226,11 +237,15 @@ mod unit_tests {
         let mut channel_store = ChannelStore::default();
         let test1_channel_name = "test1.test.channel";
         let test1_owner_id = 1usize;
-        channel_store.register_write_channel(test1_channel_name, test1_owner_id, Reg::from(8u8));
+        channel_store.register_write_channel(
+            test1_channel_name.to_string(),
+            test1_owner_id,
+            Reg::from(8u8),
+        );
 
         let test2_owner_id = 2usize;
         let test2_read_token =
-            channel_store.register_read_channel(test1_channel_name, test2_owner_id);
+            channel_store.register_read_channel(test1_channel_name.to_string(), test2_owner_id);
         let test2_channel_value: u8 = channel_store.grab(&test2_read_token).get();
         assert_eq!(test2_channel_value, 8u8);
     }
@@ -243,7 +258,7 @@ mod unit_tests {
         let test_owner_id = 1usize;
 
         let _test1_read_token =
-            channel_store.register_read_channel(test1_channel_name, test_owner_id);
+            channel_store.register_read_channel(test1_channel_name.to_string(), test_owner_id);
     }
 
     #[test]
@@ -252,9 +267,13 @@ mod unit_tests {
         let mut channel_store = ChannelStore::default();
         let test1_channel_name = "test1.test.channel";
         let test_owner_id = 1usize;
-        channel_store.register_write_channel(test1_channel_name, test_owner_id, Reg::from(8u8));
+        channel_store.register_write_channel(
+            test1_channel_name.to_string(),
+            test_owner_id,
+            Reg::from(8u8),
+        );
 
         let _test1_read_token =
-            channel_store.register_read_channel("test2.test.channel", test_owner_id);
+            channel_store.register_read_channel("test2.test.channel".to_string(), test_owner_id);
     }
 }

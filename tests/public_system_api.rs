@@ -23,7 +23,7 @@ impl Component for TestProducer {
     ) {
         self.channel_tok = channel_builder.register_write_channel(
             channel_store,
-            self.channel_name,
+            self.channel_name.to_string(),
             Reg::from(self.channel_value),
         );
     }
@@ -50,7 +50,7 @@ impl Component for TestAdder {
     ) {
         self.output_channel_tok = channel_builder.register_write_channel(
             channel_store,
-            self.output_channel_name,
+            self.output_channel_name.to_string(),
             Reg::from(0i64),
         )
     }
@@ -60,8 +60,8 @@ impl Component for TestAdder {
         channel_builder: comet::channel::store::ChannelReadBuilder,
         channel_store: &mut comet::channel::store::ChannelStore,
     ) {
-        self.input_channel_tok =
-            channel_builder.register_read_channel(channel_store, self.input_channel_name);
+        self.input_channel_tok = channel_builder
+            .register_read_channel(channel_store, self.input_channel_name.to_string());
     }
 
     fn dispatch(&mut self, channel_store: &comet::channel::store::ChannelStore) {
