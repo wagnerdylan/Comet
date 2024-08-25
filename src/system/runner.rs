@@ -82,15 +82,42 @@ impl Runner {
 
 #[cfg(test)]
 mod unit_tests {
-    use alloc::{boxed::Box, vec::Vec};
+    use alloc::{
+        boxed::Box,
+        string::{String, ToString},
+        vec::Vec,
+    };
 
-    use crate::system::component::Component;
+    use crate::{channel::reg::Reg, system::component::Component};
 
     use super::Runner;
 
     struct TestComponent();
     impl Component for TestComponent {
         fn dispatch(&mut self, _channel_store: &crate::channel::store::ChannelStore) {}
+    }
+
+    struct TestProducerComponent(String, Option<String>);
+    impl Component for TestProducerComponent {
+        fn dispatch(&mut self, _channel_store: &crate::channel::store::ChannelStore) {}
+
+        fn register_write_channels(
+            &mut self,
+            mut channel_builder: crate::channel::store::ChannelWriteBuilder,
+            channel_store: &mut crate::channel::store::ChannelStore,
+        ) {
+            channel_builder.register_write_channel(channel_store, self.0.clone(), Reg::from(0u8));
+        }
+
+        fn register_read_channels(
+            &mut self,
+            channel_builder: crate::channel::store::ChannelReadBuilder,
+            channel_store: &mut crate::channel::store::ChannelStore,
+        ) {
+            if let Some(name) = self.1.as_ref() {
+                channel_builder.register_read_channel(channel_store, name.clone());
+            }
+        }
     }
 
     #[test]
@@ -116,6 +143,13 @@ mod unit_tests {
     }
 
     #[test]
+    fn test_empty_runner() {
+        let mut runner = Runner::default();
+        runner.initialize();
+        runner.dispatch_components();
+    }
+
+    #[test]
     fn test_modify_component_ordering() {
         let mut runner = Runner::default();
         runner.add_component(Box::new(TestComponent()));
@@ -135,9 +169,34 @@ mod unit_tests {
     #[test]
     fn test_init() {
         let mut runner = Runner::default();
-        runner.add_component(Box::new(TestComponent()));
-        runner.add_component(Box::new(TestComponent()));
-        runner.add_component(Box::new(TestComponent()));
-        runner.add_component(Box::new(TestComponent()));
+        // Add the components in an order which does not match the computed execution order.
+        runner.add_component(Box::new(TestProducerComponent(
+            "test.producer4".to_string(),
+            Some("test.producer3".to_string()),
+        )));
+        runner.add_component(Box::new(TestProducerComponent(
+            "test.producer3".to_string(),
+            Some("test.producer1".to_string()),
+        )));
+        runner.add_component(Box::new(TestProducerComponent(
+            "test.producer1".to_string(),
+            None,
+        )));
+        runner.add_component(Box::new(TestProducerComponent(
+            "test.producer2".to_string(),
+            Some("test.producer1".to_string()),
+        )));
+
+        assert!(!runner.init_complete);
+        runner.initialize();
+        assert!(runner.init_complete);
+
+        assert_eq!(runner.components.len(), 4);
+        assert_eq!(runner.components.first().unwrap().id, 2);
+        assert_eq!(runner.components.get(1).unwrap().id, 3);
+        assert_eq!(runner.components.get(2).unwrap().id, 1);
+        assert_eq!(runner.components.last().unwrap().id, 0);
+
+        runner.dispatch_components();
     }
 }
