@@ -74,7 +74,7 @@ impl Component for TestAdder {
 }
 
 #[test]
-fn runnner_api() {
+fn runner_api() {
     let producer_42 = TestProducer {
         channel_tok: ChannelOwnerToken::default(),
         channel_name: "test.channel",
