@@ -25,11 +25,20 @@ pub struct Reg {
 impl Reg {
     pub fn get_bytes(&self, out_slice: &mut [u8]) {
         assert_eq!(self.reg_type, RegType::Bytes);
-        assert!(out_slice.len() <= self.data.borrow().len());
+        assert!(out_slice.len() == self.data.borrow().len());
 
         for (i, byte) in self.data.borrow().iter().enumerate() {
             out_slice[i] = *byte;
         }
+    }
+
+    pub fn try_get_bytes(&self, out_slice: &mut [u8]) -> Result<(), &'static str> {
+        if self.reg_type != RegType::Bytes {
+            return Err("Get type mismatch.");
+        }
+        self.get_bytes(out_slice);
+
+        Ok(())
     }
 }
 
@@ -55,10 +64,14 @@ impl<'a> RegMutView<'a> {
 
 pub trait RegSetter<T> {
     fn set(&self, value: T);
+
+    fn try_set(&self, value: T) -> Result<(), &'static str>;
 }
 
 pub trait RegGetter<T> {
     fn get(&self) -> T;
+
+    fn try_get(&self) -> Result<T, &'static str>;
 }
 
 macro_rules! reg_setter {
@@ -71,6 +84,15 @@ macro_rules! reg_setter {
                     .borrow_mut()
                     .extend_from_slice(&value.to_ne_bytes());
             }
+
+            fn try_set(&self, value: $prim_type) -> Result<(), &'static str> {
+                if self.reg_type != $enum_type {
+                    return Err("Set type mismatch.");
+                }
+                self.set(value);
+
+                Ok(())
+            }
         }
     };
 }
@@ -80,6 +102,15 @@ impl RegSetter<&[u8]> for Reg {
         assert_eq!(self.reg_type, RegType::Bytes);
         self.data.borrow_mut().clear();
         self.data.borrow_mut().extend_from_slice(value);
+    }
+
+    fn try_set(&self, value: &[u8]) -> Result<(), &'static str> {
+        if self.reg_type != RegType::Bytes {
+            return Err("Set type mismatch.");
+        }
+        self.set(value);
+
+        Ok(())
     }
 }
 
@@ -121,6 +152,13 @@ macro_rules! reg_getter {
                 }
                 <$prim_type>::from_ne_bytes(data_bytes)
             }
+
+            fn try_get(&self) -> Result<$prim_type, &'static str> {
+                if self.reg_type != $enum_type {
+                    return Err("Get type mismatch.");
+                }
+                Ok(self.get())
+            }
         }
     };
 }
@@ -131,6 +169,10 @@ macro_rules! reg_view_getter {
             fn get(&self) -> $prim_type {
                 self.reg.get()
             }
+
+            fn try_get(&self) -> Result<$prim_type, &'static str> {
+                self.reg.try_get()
+            }
         }
     };
 }
@@ -140,6 +182,10 @@ macro_rules! reg_view_setter {
         impl RegSetter<$prim_type> for $view_ident<'_> {
             fn set(&self, val: $prim_type) {
                 self.reg.set(val);
+            }
+
+            fn try_set(&self, val: $prim_type) -> Result<(), &'static str> {
+                self.reg.try_set(val)
             }
         }
     };
@@ -269,5 +315,41 @@ mod unit_tests {
         read_view.set(8u8);
         let new_reg_value: u8 = read_view.get();
         assert_eq!(new_reg_value, 8);
+    }
+
+    #[test]
+    #[should_panic(expected = "Get type mismatch.")]
+    fn test_try_reg_get() {
+        let reg = Reg::from(8u8);
+        let _valid_val: u8 = reg.try_get().unwrap();
+
+        let _invalid_val: i64 = reg.try_get().unwrap();
+    }
+
+    #[test]
+    #[should_panic(
+        expected = "called `Result::unwrap()` on an `Err` value: \"Set type mismatch.\""
+    )]
+    fn test_try_reg_set() {
+        let reg = Reg::from(42.0f32);
+        reg.try_set(50.0f32).unwrap();
+
+        let reg_val: f32 = reg.get();
+        assert_eq!(reg_val, 50.0f32);
+
+        reg.try_set(4u8).unwrap();
+    }
+
+    #[test]
+    fn test_get_bytes() {
+        let bytes_test = [1u8, 2, 3, 4, 5];
+        let reg = Reg::from(bytes_test.as_slice());
+        let mut test_data_bytes = [0u8; 5];
+
+        reg.get_bytes(&mut test_data_bytes);
+        assert_eq!(bytes_test, test_data_bytes);
+
+        test_data_bytes = [0u8; 5];
+        reg.try_get_bytes(&mut test_data_bytes).unwrap();
     }
 }
