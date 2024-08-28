@@ -240,6 +240,10 @@ pub struct ChannelDanglingBuilder {
 }
 
 impl ChannelDanglingBuilder {
+    pub fn new(owner_id: usize) -> ChannelDanglingBuilder {
+        ChannelDanglingBuilder { owner_id }
+    }
+
     pub fn register_dangling_channel(
         &self,
         channel_store: &mut ChannelStore,
@@ -397,5 +401,14 @@ mod unit_tests {
             channel_store.query_unowned_dangling_channel_names(),
             vec!["test.test3".to_string()]
         );
+    }
+
+    #[test]
+    #[should_panic(expected = "Channel [test.test1] already has an owner.")]
+    fn test_dangling_channels_multi_owner() {
+        let mut channel_store = ChannelStore::default();
+        channel_store.register_dangling_channel("test.test1".to_string(), 1, Reg::from(90u8));
+        channel_store.try_obtain_channel_ownership("test.test1".to_string(), 2);
+        channel_store.try_obtain_channel_ownership("test.test1".to_string(), 3);
     }
 }
