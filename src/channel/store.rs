@@ -10,9 +10,16 @@ use super::{
     token::{ChannelOwnerToken, ChannelReaderToken},
 };
 
+#[derive(PartialEq, Debug)]
+enum IdType {
+    Owner(usize),
+    // ReaderReq variants are used to track dangling channel readers who create the channel.
+    ReaderReq(usize),
+}
+
 struct Channel {
     pub name: String,
-    pub owner_id: usize,
+    pub owner_id: IdType,
     pub reg: Reg,
 }
 
@@ -47,7 +54,9 @@ impl ChannelStore {
         query_result.is_err()
     }
 
-    fn register_channel(&mut self, name: String, owner_id: usize, reg: Reg) -> usize {
+    fn register_channel(&mut self, name: String, owner_id: IdType, reg: Reg) -> usize {
+        assert!(self.is_unique_channel_name(name.as_str()));
+        assert!(!name.is_empty());
         let accessor_id = self.channels.len();
         self.channels.push(Channel {
             name,
@@ -64,10 +73,43 @@ impl ChannelStore {
         owner_id: usize,
         reg: Reg,
     ) -> ChannelOwnerToken {
-        assert!(self.is_unique_channel_name(name.as_str()));
-        assert!(!name.is_empty());
-        let accessor_id = self.register_channel(name, owner_id, reg);
-        ChannelOwnerToken::new(accessor_id)
+        let accessor_idx = self.register_channel(name, IdType::Owner(owner_id), reg);
+        ChannelOwnerToken::new(accessor_idx)
+    }
+
+    pub(self) fn register_dangling_channel(
+        &mut self,
+        name: String,
+        reader_id: usize,
+        reg: Reg,
+    ) -> ChannelReaderToken {
+        let accessor_idx: usize = self.register_channel(name, IdType::ReaderReq(reader_id), reg);
+        ChannelReaderToken::new(accessor_idx)
+    }
+
+    pub(self) fn try_obtain_channel_ownership(
+        &mut self,
+        name: String,
+        owner_id: usize,
+    ) -> ChannelOwnerToken {
+        let query_result = self.get_existing_channel_idx(name.as_str());
+        let accessor_idx =
+            query_result.unwrap_or_else(|_| panic!("Channel [{}] does not exist.", name));
+        let channel_reader_id = {
+            match self.channels.get(accessor_idx).unwrap().owner_id {
+                IdType::Owner(_) => panic!("Channel [{}] already has an owner.", name),
+                IdType::ReaderReq(id) => id,
+            }
+        };
+        self.channels.get_mut(accessor_idx).unwrap().owner_id = IdType::Owner(owner_id);
+        self.node_graph
+            .as_mut()
+            .unwrap()
+            .insert_node_dependency(NodeDependency {
+                owner: owner_id,
+                consumer: channel_reader_id,
+            });
+        ChannelOwnerToken::new(accessor_idx)
     }
 
     pub(self) fn register_read_channel(
@@ -76,10 +118,20 @@ impl ChannelStore {
         read_owner_id: usize,
     ) -> ChannelReaderToken {
         let query_result = self.get_existing_channel_idx(name.as_str());
-        // TODO handle panic in a better way here.
-        let accessor_idx = query_result.unwrap();
+        let accessor_idx =
+            query_result.unwrap_or_else(|_| panic!("Channel [{}] does not exist.", name));
         // Associate the consumer (caller) with the owner of the channel for generating the execution ordering of components.
-        let channel_owner_id = self.channels.get(accessor_idx).unwrap().owner_id;
+        let channel_owner_id = {
+            match self.channels.get(accessor_idx).unwrap().owner_id {
+                IdType::Owner(id) => id,
+                IdType::ReaderReq(_) => {
+                    panic!(
+                        "Channel [{}] cannot bind as there is no owner for this channel.",
+                        name
+                    )
+                }
+            }
+        };
         // Unchecked call to unwrap() is okay here as register calls are only allowed when node_graph is Some().
         self.node_graph
             .as_mut()
@@ -90,6 +142,14 @@ impl ChannelStore {
             });
 
         ChannelReaderToken::new(accessor_idx)
+    }
+
+    pub(self) fn query_unowned_dangling_channel_names(&self) -> Vec<String> {
+        self.channels
+            .iter()
+            .filter(|channel| matches!(channel.owner_id, IdType::ReaderReq(_)))
+            .map(|channel| channel.name.clone())
+            .collect()
     }
 }
 
@@ -140,6 +200,21 @@ impl ChannelWriteBuilder {
     ) -> ChannelOwnerToken {
         channel_store.register_write_channel(name, self.owner_id, reg)
     }
+
+    pub fn try_obtain_channel_ownership(
+        &mut self,
+        channel_store: &mut ChannelStore,
+        name: String,
+    ) -> ChannelOwnerToken {
+        channel_store.try_obtain_channel_ownership(name, self.owner_id)
+    }
+
+    pub fn query_unowned_dangling_channel_names(
+        &self,
+        channel_store: &ChannelStore,
+    ) -> Vec<String> {
+        channel_store.query_unowned_dangling_channel_names()
+    }
 }
 
 pub struct ChannelReadBuilder {
@@ -160,12 +235,32 @@ impl ChannelReadBuilder {
     }
 }
 
+pub struct ChannelDanglingBuilder {
+    owner_id: usize,
+}
+
+impl ChannelDanglingBuilder {
+    pub fn new(owner_id: usize) -> ChannelDanglingBuilder {
+        ChannelDanglingBuilder { owner_id }
+    }
+
+    pub fn register_dangling_channel(
+        &self,
+        channel_store: &mut ChannelStore,
+        name: String,
+        default_value: Reg,
+    ) -> ChannelReaderToken {
+        channel_store.register_dangling_channel(name, self.owner_id, default_value)
+    }
+}
+
 #[cfg(test)]
 mod unit_tests {
-    use alloc::string::ToString;
+    use alloc::{string::ToString, vec};
 
     use crate::channel::{
         reg::{Reg, RegGetter},
+        store::IdType,
         token::ChannelTokenOps,
     };
 
@@ -196,7 +291,7 @@ mod unit_tests {
         let test1_channel = &channel_store.channels[channel_store
             .get_existing_channel_idx(test1_channel_name)
             .unwrap()];
-        assert_eq!(test1_channel.owner_id, 1);
+        assert_eq!(test1_channel.owner_id, IdType::Owner(1));
     }
 
     #[test]
@@ -251,7 +346,7 @@ mod unit_tests {
     }
 
     #[test]
-    #[should_panic(expected = "called `Result::unwrap()` on an `Err` value: ()")]
+    #[should_panic(expected = "Channel [test1.test.channel] does not exist.")]
     fn test_empty_register_read_channel() {
         let mut channel_store = ChannelStore::default();
         let test1_channel_name = "test1.test.channel";
@@ -262,7 +357,7 @@ mod unit_tests {
     }
 
     #[test]
-    #[should_panic(expected = "called `Result::unwrap()` on an `Err` value: ()")]
+    #[should_panic(expected = "Channel [test2.test.channel] does not exist.")]
     fn test_mismatch_register_read_channel() {
         let mut channel_store = ChannelStore::default();
         let test1_channel_name = "test1.test.channel";
@@ -275,5 +370,45 @@ mod unit_tests {
 
         let _test1_read_token =
             channel_store.register_read_channel("test2.test.channel".to_string(), test_owner_id);
+    }
+
+    #[test]
+    fn test_dangling_channels() {
+        let mut channel_store = ChannelStore::default();
+        channel_store.register_dangling_channel("test.test1".to_string(), 1, Reg::from(90u8));
+        channel_store.register_write_channel("test.test2".to_string(), 1, Reg::from(70u8));
+        channel_store.register_dangling_channel("test.test3".to_string(), 1, Reg::from(90u8));
+
+        assert!(matches!(
+            channel_store.channels.first().unwrap().owner_id,
+            IdType::ReaderReq(1)
+        ));
+        assert!(matches!(
+            channel_store.channels.get(2).unwrap().owner_id,
+            IdType::ReaderReq(1)
+        ));
+        assert_eq!(
+            channel_store.query_unowned_dangling_channel_names(),
+            vec!["test.test1".to_string(), "test.test3".to_string()]
+        );
+
+        channel_store.try_obtain_channel_ownership("test.test1".to_string(), 2);
+        assert!(matches!(
+            channel_store.channels.first().unwrap().owner_id,
+            IdType::Owner(2)
+        ));
+        assert_eq!(
+            channel_store.query_unowned_dangling_channel_names(),
+            vec!["test.test3".to_string()]
+        );
+    }
+
+    #[test]
+    #[should_panic(expected = "Channel [test.test1] already has an owner.")]
+    fn test_dangling_channels_multi_owner() {
+        let mut channel_store = ChannelStore::default();
+        channel_store.register_dangling_channel("test.test1".to_string(), 1, Reg::from(90u8));
+        channel_store.try_obtain_channel_ownership("test.test1".to_string(), 2);
+        channel_store.try_obtain_channel_ownership("test.test1".to_string(), 3);
     }
 }

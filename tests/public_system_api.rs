@@ -35,14 +35,49 @@ impl Component for TestProducer {
     }
 }
 
+struct TestModifier {
+    pub channel_tok: ChannelOwnerToken,
+}
+
+impl Component for TestModifier {
+    fn register_write_channels(
+        &mut self,
+        mut channel_builder: comet::channel::store::ChannelWriteBuilder,
+        channel_store: &mut comet::channel::store::ChannelStore,
+    ) {
+        let mut dangle_names = channel_builder.query_unowned_dangling_channel_names(channel_store);
+        self.channel_tok = channel_builder
+            .try_obtain_channel_ownership(channel_store, dangle_names.pop().unwrap());
+    }
+
+    fn dispatch(&mut self, channel_store: &comet::channel::store::ChannelStore) {
+        let value: i64 = channel_store.grab(&self.channel_tok).get();
+        channel_store.grab(&self.channel_tok).set(value + 1);
+    }
+}
+
 struct TestAdder {
     pub input_channel_tok: ChannelReaderToken,
     pub input_channel_name: &'static str,
     pub output_channel_tok: ChannelOwnerToken,
     pub output_channel_name: &'static str,
+    pub mod_channel_tok: ChannelReaderToken,
+    pub mod_channel_name: &'static str,
 }
 
 impl Component for TestAdder {
+    fn register_dangling_channels(
+        &mut self,
+        channel_builder: comet::channel::store::ChannelDanglingBuilder,
+        channel_store: &mut comet::channel::store::ChannelStore,
+    ) {
+        self.mod_channel_tok = channel_builder.register_dangling_channel(
+            channel_store,
+            self.mod_channel_name.to_string(),
+            Reg::from(10i64),
+        );
+    }
+
     fn register_write_channels(
         &mut self,
         mut channel_builder: comet::channel::store::ChannelWriteBuilder,
@@ -67,9 +102,10 @@ impl Component for TestAdder {
     fn dispatch(&mut self, channel_store: &comet::channel::store::ChannelStore) {
         let input_value: i64 = channel_store.grab(&self.input_channel_tok).get();
         let current_count: i64 = channel_store.grab(&self.output_channel_tok).get();
+        let mod_value: i64 = channel_store.grab(&self.mod_channel_tok).get();
         channel_store
             .grab(&self.output_channel_tok)
-            .set(current_count + input_value);
+            .set(current_count + input_value + mod_value);
     }
 }
 
@@ -78,21 +114,28 @@ fn runner_api() {
     let producer_42 = TestProducer {
         channel_tok: ChannelOwnerToken::default(),
         channel_name: "test.channel",
-        channel_value: 42,
+        channel_value: 40,
     };
     let adder = TestAdder {
         input_channel_tok: ChannelReaderToken::default(),
         input_channel_name: "test.channel",
         output_channel_tok: ChannelOwnerToken::default(),
         output_channel_name: "test.channel.add",
+        mod_channel_tok: ChannelReaderToken::default(),
+        mod_channel_name: "test.channel.mod",
+    };
+    let modifier = TestModifier {
+        channel_tok: ChannelOwnerToken::default(),
     };
 
     let mut runner = Runner::default();
 
     runner.add_component(Box::new(adder));
     runner.add_component(Box::new(producer_42));
+    runner.add_component(Box::new(modifier));
 
     runner.initialize();
 
+    runner.dispatch_components();
     runner.dispatch_components();
 }

@@ -1,7 +1,9 @@
 use alloc::{boxed::Box, vec::Vec};
 
 use crate::{
-    channel::store::{ChannelReadBuilder, ChannelStore, ChannelWriteBuilder},
+    channel::store::{
+        ChannelDanglingBuilder, ChannelReadBuilder, ChannelStore, ChannelWriteBuilder,
+    },
     system::order::NodeOrderCalc,
 };
 
@@ -27,6 +29,15 @@ impl Runner {
 
     pub fn initialize(&mut self) {
         assert!(!self.init_complete);
+
+        // Register dangling channels before write channels as dangling channels may be owned during write channel register.
+        for component_holder in self.components.iter_mut() {
+            let write_builder = ChannelDanglingBuilder::new(component_holder.id);
+            component_holder
+                .component
+                .register_dangling_channels(write_builder, &mut self.channel_store);
+        }
+
         // Register component write channels with the channel store. Write channels must be registered before
         // read channels.
         for component_holder in self.components.iter_mut() {

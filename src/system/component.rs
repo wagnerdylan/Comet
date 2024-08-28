@@ -1,8 +1,17 @@
 use alloc::boxed::Box;
 
-use crate::channel::store::{ChannelReadBuilder, ChannelStore, ChannelWriteBuilder};
+use crate::channel::store::{
+    ChannelDanglingBuilder, ChannelReadBuilder, ChannelStore, ChannelWriteBuilder,
+};
 
 pub trait Component {
+    fn register_dangling_channels(
+        &mut self,
+        _channel_builder: ChannelDanglingBuilder,
+        _channel_store: &mut ChannelStore,
+    ) {
+    }
+
     fn register_write_channels(
         &mut self,
         _channel_builder: ChannelWriteBuilder,
