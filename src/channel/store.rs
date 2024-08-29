@@ -258,11 +258,7 @@ impl ChannelDanglingBuilder {
 mod unit_tests {
     use alloc::{string::ToString, vec};
 
-    use crate::channel::{
-        reg::{Reg, RegGetter},
-        store::IdType,
-        token::ChannelTokenOps,
-    };
+    use crate::channel::{reg::Reg, store::IdType, token::ChannelTokenOps};
 
     use super::{ChannelStore, RegViewProducer};
 
@@ -274,7 +270,7 @@ mod unit_tests {
         let token_test1 = channel_store.register_write_channel(
             test1_channel_name.to_string(),
             test_owner_id,
-            Reg::from(8u8),
+            Reg::new(8u8),
         );
 
         assert_eq!(token_test1.get_accessor_id(), 0);
@@ -283,7 +279,7 @@ mod unit_tests {
         let token_test2 = channel_store.register_write_channel(
             test2_channel_name.to_string(),
             test_owner_id,
-            Reg::from(10u8),
+            Reg::new(10u8),
         );
 
         assert_eq!(token_test2.get_accessor_id(), 1);
@@ -303,14 +299,14 @@ mod unit_tests {
         let token_test1 = channel_store.register_write_channel(
             test1_channel_name.to_string(),
             test_owner_id,
-            Reg::from(8u8),
+            Reg::new(8u8),
         );
 
         assert_eq!(token_test1.get_accessor_id(), 0);
         let _token_test2 = channel_store.register_write_channel(
             test1_channel_name.to_string(),
             test_owner_id,
-            Reg::from(10u8),
+            Reg::new(10u8),
         );
     }
 
@@ -323,7 +319,7 @@ mod unit_tests {
         let _token_test1 = channel_store.register_write_channel(
             test1_channel_name.to_string(),
             test_owner_id,
-            Reg::from(8u8),
+            Reg::new(8u8),
         );
     }
 
@@ -335,7 +331,7 @@ mod unit_tests {
         channel_store.register_write_channel(
             test1_channel_name.to_string(),
             test1_owner_id,
-            Reg::from(8u8),
+            Reg::new(8u8),
         );
 
         let test2_owner_id = 2usize;
@@ -365,7 +361,7 @@ mod unit_tests {
         channel_store.register_write_channel(
             test1_channel_name.to_string(),
             test_owner_id,
-            Reg::from(8u8),
+            Reg::new(8u8),
         );
 
         let _test1_read_token =
@@ -375,9 +371,9 @@ mod unit_tests {
     #[test]
     fn test_dangling_channels() {
         let mut channel_store = ChannelStore::default();
-        channel_store.register_dangling_channel("test.test1".to_string(), 1, Reg::from(90u8));
-        channel_store.register_write_channel("test.test2".to_string(), 1, Reg::from(70u8));
-        channel_store.register_dangling_channel("test.test3".to_string(), 1, Reg::from(90u8));
+        channel_store.register_dangling_channel("test.test1".to_string(), 1, Reg::new(90u8));
+        channel_store.register_write_channel("test.test2".to_string(), 1, Reg::new(70u8));
+        channel_store.register_dangling_channel("test.test3".to_string(), 1, Reg::new(90u8));
 
         assert!(matches!(
             channel_store.channels.first().unwrap().owner_id,
@@ -407,7 +403,7 @@ mod unit_tests {
     #[should_panic(expected = "Channel [test.test1] already has an owner.")]
     fn test_dangling_channels_multi_owner() {
         let mut channel_store = ChannelStore::default();
-        channel_store.register_dangling_channel("test.test1".to_string(), 1, Reg::from(90u8));
+        channel_store.register_dangling_channel("test.test1".to_string(), 1, Reg::new(90u8));
         channel_store.try_obtain_channel_ownership("test.test1".to_string(), 2);
         channel_store.try_obtain_channel_ownership("test.test1".to_string(), 3);
     }

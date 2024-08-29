@@ -1,6 +1,6 @@
 use comet::{
     channel::{
-        reg::{Reg, RegGetter, RegSetter},
+        reg::Reg,
         store::RegViewProducer,
         token::{ChannelOwnerToken, ChannelReaderToken},
     },
@@ -24,7 +24,7 @@ impl Component for TestProducer {
         self.channel_tok = channel_builder.register_write_channel(
             channel_store,
             self.channel_name.to_string(),
-            Reg::from(self.channel_value),
+            Reg::new(self.channel_value),
         );
     }
 
@@ -74,7 +74,7 @@ impl Component for TestAdder {
         self.mod_channel_tok = channel_builder.register_dangling_channel(
             channel_store,
             self.mod_channel_name.to_string(),
-            Reg::from(10i64),
+            Reg::new(10i64),
         );
     }
 
@@ -86,7 +86,7 @@ impl Component for TestAdder {
         self.output_channel_tok = channel_builder.register_write_channel(
             channel_store,
             self.output_channel_name.to_string(),
-            Reg::from(0i64),
+            Reg::new(0i64),
         )
     }
 
