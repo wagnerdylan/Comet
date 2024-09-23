@@ -7,7 +7,7 @@ use crate::{
 
 use super::{
     reg::{Reg, RegMutView, RegReadView},
-    token::{ChannelOwnerToken, ChannelReaderToken},
+    token::{ChannelBehindToken, ChannelOwnerToken, ChannelReaderToken},
 };
 
 #[derive(PartialEq, Debug)]
@@ -21,11 +21,13 @@ struct Channel {
     pub name: String,
     pub owner_id: IdType,
     pub reg: Reg,
+    pub behind_reg: Option<Reg>,
 }
 
 pub struct ChannelStore {
     channels: Vec<Channel>,
     pub(crate) node_graph: Option<NodeGraph>,
+    pub(crate) active_behind_channels_idx: Vec<usize>,
 }
 
 impl Default for ChannelStore {
@@ -33,6 +35,7 @@ impl Default for ChannelStore {
         Self {
             channels: Vec::default(),
             node_graph: Some(NodeGraph::default()),
+            active_behind_channels_idx: Vec::default(),
         }
     }
 }
@@ -62,6 +65,7 @@ impl ChannelStore {
             name,
             owner_id,
             reg,
+            behind_reg: None,
         });
 
         accessor_id
@@ -144,12 +148,48 @@ impl ChannelStore {
         ChannelReaderToken::new(accessor_idx)
     }
 
+    pub(self) fn register_read_behind_channel(&mut self, name: String) -> ChannelBehindToken {
+        let query_result = self.get_existing_channel_idx(name.as_str());
+        let accessor_idx =
+            query_result.unwrap_or_else(|_| panic!("Channel [{}] does not exist.", name));
+
+        let channel = self.channels.get_mut(accessor_idx).unwrap();
+        if let IdType::ReaderReq(_) = channel.owner_id {
+            panic!(
+                "Channel [{}] cannot bind as there is no owner for this channel.",
+                name
+            )
+        }
+
+        // Mark the channel as operating as an active behind channel.
+        if !self.active_behind_channels_idx.contains(&accessor_idx) {
+            self.active_behind_channels_idx.push(accessor_idx);
+        }
+
+        // Behind register which is contained by the channel should contain a clone of
+        // the initial reg value. This allows behind channel access across all stages of execution.
+        channel.behind_reg = Some(channel.reg.clone());
+
+        ChannelBehindToken::new(accessor_idx)
+    }
+
     pub(self) fn query_unowned_dangling_channel_names(&self) -> Vec<String> {
         self.channels
             .iter()
             .filter(|channel| matches!(channel.owner_id, IdType::ReaderReq(_)))
             .map(|channel| channel.name.clone())
             .collect()
+    }
+
+    pub(crate) fn update_active_behind_registers(&mut self) {
+        for idx in self.active_behind_channels_idx.iter() {
+            let channel = self.channels.get_mut(*idx).unwrap();
+
+            match channel.behind_reg.as_mut() {
+                Some(reg) => reg.clone_from(&channel.reg),
+                None => panic!("Behind register for channel [{}] is None, this register should contain Some() value.", channel.name),
+            }
+        }
     }
 }
 
@@ -177,6 +217,19 @@ impl<'a> RegViewProducer<'a, ChannelReaderToken, RegReadView<'a>> for ChannelSto
 
         if let Some(channel) = self.channels.get(accessor_id) {
             return RegReadView::new(&channel.reg);
+        } else {
+            panic!("Invalid accessor token.");
+        }
+    }
+}
+
+impl<'a> RegViewProducer<'a, ChannelBehindToken, RegReadView<'a>> for ChannelStore {
+    fn grab(&'a self, token: &ChannelBehindToken) -> RegReadView<'a> {
+        assert!(token.is_valid());
+        let accessor_id = token.get_accessor_id();
+
+        if let Some(channel) = self.channels.get(accessor_id) {
+            return RegReadView::new(channel.behind_reg.as_ref().unwrap());
         } else {
             panic!("Invalid accessor token.");
         }
@@ -232,6 +285,14 @@ impl ChannelReadBuilder {
         name: String,
     ) -> ChannelReaderToken {
         channel_store.register_read_channel(name, self.owner_id)
+    }
+
+    pub fn register_read_behind_channel(
+        &self,
+        channel_store: &mut ChannelStore,
+        name: String,
+    ) -> ChannelBehindToken {
+        channel_store.register_read_behind_channel(name)
     }
 }
 

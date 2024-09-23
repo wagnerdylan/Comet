@@ -74,6 +74,8 @@ impl Runner {
         for component_holder in self.components.iter_mut() {
             component_holder.component.dispatch(&self.channel_store);
         }
+
+        self.channel_store.update_active_behind_registers();
     }
 
     fn modify_component_ordering(&mut self, ordering: Vec<usize>) {
