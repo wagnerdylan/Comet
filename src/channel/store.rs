@@ -468,4 +468,51 @@ mod unit_tests {
         channel_store.try_obtain_channel_ownership("test.test1".to_string(), 2);
         channel_store.try_obtain_channel_ownership("test.test1".to_string(), 3);
     }
+
+    #[test]
+    fn test_behind_channel_register() {
+        let mut channel_store = ChannelStore::default();
+        channel_store.register_write_channel("test.test1".to_string(), 1, Reg::new(70u8));
+        channel_store.register_read_channel("test.test1".to_string(), 2);
+        let behind_tok = channel_store.register_read_behind_channel("test.test1".to_string());
+
+        assert_eq!(behind_tok.get_accessor_id(), 0usize);
+        assert!(channel_store.channels.first().unwrap().behind_reg.is_some());
+        assert_eq!(
+            channel_store.active_behind_channels_idx.first().unwrap(),
+            &0usize
+        );
+        assert_eq!(channel_store.active_behind_channels_idx.len(), 1);
+
+        channel_store.register_write_channel("test.test2".to_string(), 1, Reg::new(70u8));
+        assert!(channel_store.channels.get(1).unwrap().behind_reg.is_none());
+        assert_eq!(channel_store.active_behind_channels_idx.len(), 1)
+    }
+
+    #[test]
+    fn test_behind_channel_update() {
+        let mut channel_store = ChannelStore::default();
+        let write_tok =
+            channel_store.register_write_channel("test.test1".to_string(), 1, Reg::new(70u8));
+        let behind_tok = channel_store.register_read_behind_channel("test.test1".to_string());
+
+        let mut reg_val: u8 = channel_store.grab(&write_tok).get();
+        assert_eq!(reg_val, 70u8);
+        let mut reg_behind_val: u8 = channel_store.grab(&behind_tok).get();
+        assert_eq!(reg_behind_val, 70u8);
+
+        channel_store.grab(&write_tok).set(100u8);
+        reg_val = channel_store.grab(&write_tok).get();
+        assert_eq!(reg_val, 100u8);
+        reg_behind_val = channel_store.grab(&behind_tok).get();
+        assert_eq!(reg_behind_val, 70u8);
+
+        channel_store.update_active_behind_registers();
+
+        channel_store.grab(&write_tok).set(100u8);
+        reg_val = channel_store.grab(&write_tok).get();
+        assert_eq!(reg_val, 100u8);
+        reg_behind_val = channel_store.grab(&behind_tok).get();
+        assert_eq!(reg_behind_val, 100u8);
+    }
 }
