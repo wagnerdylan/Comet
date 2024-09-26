@@ -18,7 +18,7 @@ struct TestProducer {
 impl Component for TestProducer {
     fn register_write_channels(
         &mut self,
-        mut channel_builder: comet::channel::store::ChannelWriteBuilder,
+        channel_builder: comet::channel::store::ChannelWriteBuilder,
         channel_store: &mut comet::channel::store::ChannelStore,
     ) {
         self.channel_tok = channel_builder.register_write_channel(
@@ -42,7 +42,7 @@ struct TestModifier {
 impl Component for TestModifier {
     fn register_write_channels(
         &mut self,
-        mut channel_builder: comet::channel::store::ChannelWriteBuilder,
+        channel_builder: comet::channel::store::ChannelWriteBuilder,
         channel_store: &mut comet::channel::store::ChannelStore,
     ) {
         let mut dangle_names = channel_builder.query_unowned_dangling_channel_names(channel_store);
@@ -81,7 +81,7 @@ impl Component for TestAdder {
 
     fn register_write_channels(
         &mut self,
-        mut channel_builder: comet::channel::store::ChannelWriteBuilder,
+        channel_builder: comet::channel::store::ChannelWriteBuilder,
         channel_store: &mut comet::channel::store::ChannelStore,
     ) {
         self.output_channel_tok = channel_builder.register_write_channel(
@@ -131,7 +131,7 @@ struct TestCycleRW {
 impl Component for TestCycleRW {
     fn register_write_channels(
         &mut self,
-        mut channel_builder: comet::channel::store::ChannelWriteBuilder,
+        channel_builder: comet::channel::store::ChannelWriteBuilder,
         channel_store: &mut comet::channel::store::ChannelStore,
     ) {
         self.write_tok = channel_builder.register_write_channel(

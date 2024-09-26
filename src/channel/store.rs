@@ -246,7 +246,7 @@ impl ChannelWriteBuilder {
     }
 
     pub fn register_write_channel(
-        &mut self,
+        &self,
         channel_store: &mut ChannelStore,
         name: String,
         reg: Reg,
@@ -255,7 +255,7 @@ impl ChannelWriteBuilder {
     }
 
     pub fn try_obtain_channel_ownership(
-        &mut self,
+        &self,
         channel_store: &mut ChannelStore,
         name: String,
     ) -> ChannelOwnerToken {

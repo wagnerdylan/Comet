@@ -8,7 +8,7 @@ extern crate comet;
 #[test]
 fn channel_api() {
     let mut channel_store = ChannelStore::default();
-    let mut channel_builder = ChannelWriteBuilder::new(0usize);
+    let channel_builder = ChannelWriteBuilder::new(0usize);
 
     let t_1_o = channel_builder.register_write_channel(
         &mut channel_store,

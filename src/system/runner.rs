@@ -116,7 +116,7 @@ mod unit_tests {
 
         fn register_write_channels(
             &mut self,
-            mut channel_builder: crate::channel::store::ChannelWriteBuilder,
+            channel_builder: crate::channel::store::ChannelWriteBuilder,
             channel_store: &mut crate::channel::store::ChannelStore,
         ) {
             channel_builder.register_write_channel(channel_store, self.0.clone(), Reg::new(0u8));
