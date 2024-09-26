@@ -1,25 +1,34 @@
 use core::{
-    any::{self, Any, TypeId},
+    any::{self, TypeId},
     cell::RefCell,
     mem,
 };
 
 use alloc::boxed::Box;
+use downcast;
+use dyn_clone::DynClone;
 
+pub trait AnyClone: downcast::Any + DynClone {}
+dyn_clone::clone_trait_object!(AnyClone);
+downcast::downcast!(dyn AnyClone);
+
+impl<T: Clone + downcast::Any> AnyClone for T {}
+
+#[derive(Clone)]
 pub struct Reg {
     reg_type: TypeId,
-    data: RefCell<Box<dyn Any>>,
+    data: RefCell<Box<dyn AnyClone>>,
 }
 
 impl Reg {
-    pub fn new<T: 'static>(value: T) -> Self {
+    pub fn new<T: 'static + AnyClone>(value: T) -> Self {
         Self {
             reg_type: TypeId::of::<T>(),
             data: RefCell::new(Box::new(value)),
         }
     }
 
-    fn get<T: 'static + Clone>(&self) -> T {
+    fn get<T: 'static + AnyClone + Clone>(&self) -> T {
         if TypeId::of::<T>() != self.reg_type {
             panic!(
                 "Requested type of [{}] does not match register type for get().",
@@ -29,7 +38,7 @@ impl Reg {
         self.data.borrow().downcast_ref::<T>().unwrap().clone()
     }
 
-    fn try_get<T: 'static + Clone>(&self) -> Result<T, ()> {
+    fn try_get<T: 'static + AnyClone + Clone>(&self) -> Result<T, ()> {
         if TypeId::of::<T>() != self.reg_type {
             return Err(());
         }
@@ -65,7 +74,7 @@ impl<'a> RegReadView<'a> {
         Self { reg }
     }
 
-    pub fn get<T: 'static + Clone>(&self) -> T {
+    pub fn get<T: 'static + AnyClone + Clone>(&self) -> T {
         self.reg.get()
     }
 }
@@ -79,7 +88,7 @@ impl<'a> RegMutView<'a> {
         Self { reg }
     }
 
-    pub fn get<T: 'static + Clone>(&self) -> T {
+    pub fn get<T: 'static + AnyClone + Clone>(&self) -> T {
         self.reg.get()
     }
 

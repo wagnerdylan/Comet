@@ -109,6 +109,40 @@ impl Component for TestAdder {
     }
 }
 
+struct TestCycleRW {
+    read_name: &'static str,
+    as_behind: bool,
+    write_name: &'static str,
+}
+
+impl Component for TestCycleRW {
+    fn register_write_channels(
+        &mut self,
+        mut channel_builder: comet::channel::store::ChannelWriteBuilder,
+        channel_store: &mut comet::channel::store::ChannelStore,
+    ) {
+        channel_builder.register_write_channel(
+            channel_store,
+            self.write_name.to_string(),
+            Reg::new(34f64),
+        );
+    }
+
+    fn register_read_channels(
+        &mut self,
+        channel_builder: comet::channel::store::ChannelReadBuilder,
+        channel_store: &mut comet::channel::store::ChannelStore,
+    ) {
+        if self.as_behind {
+            channel_builder.register_read_behind_channel(channel_store, self.read_name.to_string());
+        } else {
+            channel_builder.register_read_channel(channel_store, self.read_name.to_string());
+        }
+    }
+
+    fn dispatch(&mut self, _channel_store: &comet::channel::store::ChannelStore) {}
+}
+
 #[test]
 fn runner_api() {
     let producer_42 = TestProducer {
@@ -127,12 +161,25 @@ fn runner_api() {
     let modifier = TestModifier {
         channel_tok: ChannelOwnerToken::default(),
     };
+    let cycle_1 = TestCycleRW {
+        read_name: "test.channel.cycle.2",
+        as_behind: false,
+        write_name: "test.channel.cycle.1",
+    };
+    let cycle_2 = TestCycleRW {
+        read_name: "test.channel.cycle.1",
+        as_behind: true,
+        write_name: "test.channel.cycle.2",
+    };
 
     let mut runner = Runner::default();
 
     runner.add_component(Box::new(adder));
     runner.add_component(Box::new(producer_42));
     runner.add_component(Box::new(modifier));
+
+    runner.add_component(Box::new(cycle_1));
+    runner.add_component(Box::new(cycle_2));
 
     runner.initialize();
 
