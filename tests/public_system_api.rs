@@ -2,7 +2,7 @@ use comet::{
     channel::{
         reg::Reg,
         store::RegViewProducer,
-        token::{ChannelOwnerToken, ChannelReaderToken},
+        token::{ChannelBehindToken, ChannelOwnerToken, ChannelReaderToken},
     },
     system::{component::Component, runner::Runner},
 };
@@ -63,6 +63,7 @@ struct TestAdder {
     pub output_channel_name: &'static str,
     pub mod_channel_tok: ChannelReaderToken,
     pub mod_channel_name: &'static str,
+    call_count: usize,
 }
 
 impl Component for TestAdder {
@@ -106,13 +107,25 @@ impl Component for TestAdder {
         channel_store
             .grab(&self.output_channel_tok)
             .set(current_count + input_value + mod_value);
+
+        let assert_values = [51i64, 103];
+        assert_eq!(
+            assert_values[self.call_count].clone(),
+            channel_store.grab(&self.output_channel_tok).get::<i64>()
+        );
+
+        self.call_count += 1;
     }
 }
 
 struct TestCycleRW {
     read_name: &'static str,
+    read_tok: Option<ChannelReaderToken>,
+    behind_tok: Option<ChannelBehindToken>,
     as_behind: bool,
     write_name: &'static str,
+    write_tok: ChannelOwnerToken,
+    call_count: usize,
 }
 
 impl Component for TestCycleRW {
@@ -121,10 +134,10 @@ impl Component for TestCycleRW {
         mut channel_builder: comet::channel::store::ChannelWriteBuilder,
         channel_store: &mut comet::channel::store::ChannelStore,
     ) {
-        channel_builder.register_write_channel(
+        self.write_tok = channel_builder.register_write_channel(
             channel_store,
             self.write_name.to_string(),
-            Reg::new(34f64),
+            Reg::new(34i64),
         );
     }
 
@@ -134,13 +147,38 @@ impl Component for TestCycleRW {
         channel_store: &mut comet::channel::store::ChannelStore,
     ) {
         if self.as_behind {
-            channel_builder.register_read_behind_channel(channel_store, self.read_name.to_string());
+            self.behind_tok = Some(
+                channel_builder
+                    .register_read_behind_channel(channel_store, self.read_name.to_string()),
+            );
         } else {
-            channel_builder.register_read_channel(channel_store, self.read_name.to_string());
+            self.read_tok = Some(
+                channel_builder.register_read_channel(channel_store, self.read_name.to_string()),
+            );
         }
     }
 
-    fn dispatch(&mut self, _channel_store: &comet::channel::store::ChannelStore) {}
+    fn dispatch(&mut self, channel_store: &comet::channel::store::ChannelStore) {
+        let assert_values = [34i64, 100];
+        if self.as_behind {
+            assert_eq!(
+                channel_store
+                    .grab(self.behind_tok.as_ref().unwrap())
+                    .get::<i64>(),
+                assert_values[self.call_count]
+            );
+        } else {
+            assert_eq!(
+                channel_store
+                    .grab(self.read_tok.as_ref().unwrap())
+                    .get::<i64>(),
+                100i64
+            );
+        }
+        channel_store.grab(&self.write_tok).set(100i64);
+
+        self.call_count += 1;
+    }
 }
 
 #[test]
@@ -157,6 +195,7 @@ fn runner_api() {
         output_channel_name: "test.channel.add",
         mod_channel_tok: ChannelReaderToken::default(),
         mod_channel_name: "test.channel.mod",
+        call_count: 0,
     };
     let modifier = TestModifier {
         channel_tok: ChannelOwnerToken::default(),
@@ -165,11 +204,19 @@ fn runner_api() {
         read_name: "test.channel.cycle.2",
         as_behind: false,
         write_name: "test.channel.cycle.1",
+        read_tok: Some(ChannelReaderToken::default()),
+        behind_tok: None,
+        write_tok: ChannelOwnerToken::default(),
+        call_count: 0,
     };
     let cycle_2 = TestCycleRW {
         read_name: "test.channel.cycle.1",
         as_behind: true,
         write_name: "test.channel.cycle.2",
+        read_tok: None,
+        behind_tok: Some(ChannelBehindToken::default()),
+        write_tok: ChannelOwnerToken::default(),
+        call_count: 0,
     };
 
     let mut runner = Runner::default();

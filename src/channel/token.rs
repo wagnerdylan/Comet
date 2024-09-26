@@ -18,6 +18,7 @@ pub struct ChannelReaderToken {
     is_valid: bool,
 }
 
+#[derive(Default)]
 pub struct ChannelBehindToken {
     accessor_id: usize,
     is_valid: bool,
