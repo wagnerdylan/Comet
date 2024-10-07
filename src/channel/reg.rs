@@ -1,6 +1,7 @@
 use core::{
     any::{self, TypeId},
     cell::RefCell,
+    marker::PhantomData,
     mem,
 };
 
@@ -65,34 +66,42 @@ impl Reg {
     }
 }
 
-pub struct RegReadView<'a> {
+pub struct RegReadView<'a, T: 'static + AnyClone + Clone> {
     reg: &'a Reg,
+    phantom_marker: PhantomData<T>,
 }
 
-impl<'a> RegReadView<'a> {
+impl<'a, T: 'static + AnyClone + Clone> RegReadView<'a, T> {
     pub fn new(reg: &'a Reg) -> Self {
-        Self { reg }
+        Self {
+            reg,
+            phantom_marker: PhantomData,
+        }
     }
 
-    pub fn get<T: 'static + AnyClone + Clone>(&self) -> T {
+    pub fn get(&self) -> T {
         self.reg.get()
     }
 }
 
-pub struct RegMutView<'a> {
+pub struct RegMutView<'a, T: 'static + AnyClone + Clone> {
     reg: &'a Reg,
+    phantom_marker: PhantomData<T>,
 }
 
-impl<'a> RegMutView<'a> {
+impl<'a, T: 'static + AnyClone + Clone> RegMutView<'a, T> {
     pub fn new(reg: &'a Reg) -> Self {
-        Self { reg }
+        Self {
+            reg,
+            phantom_marker: PhantomData,
+        }
     }
 
-    pub fn get<T: 'static + AnyClone + Clone>(&self) -> T {
+    pub fn get(&self) -> T {
         self.reg.get()
     }
 
-    pub fn set<T: 'static>(&self, value: T) {
+    pub fn set(&self, value: T) {
         self.reg.set(value)
     }
 }

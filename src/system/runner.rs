@@ -101,7 +101,7 @@ mod unit_tests {
         vec::Vec,
     };
 
-    use crate::{channel::reg::Reg, system::component::Component};
+    use crate::system::component::Component;
 
     use super::Runner;
 
@@ -119,7 +119,7 @@ mod unit_tests {
             channel_builder: crate::channel::store::ChannelWriteBuilder,
             channel_store: &mut crate::channel::store::ChannelStore,
         ) {
-            channel_builder.register_write_channel(channel_store, self.0.clone(), Reg::new(0u8));
+            channel_builder.register_write_channel(channel_store, self.0.clone(), 0u8);
         }
 
         fn register_read_channels(
@@ -128,7 +128,7 @@ mod unit_tests {
             channel_store: &mut crate::channel::store::ChannelStore,
         ) {
             if let Some(name) = self.1.as_ref() {
-                channel_builder.register_read_channel(channel_store, name.clone());
+                channel_builder.register_read_channel::<u8>(channel_store, name.clone());
             }
         }
     }

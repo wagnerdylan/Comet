@@ -1,3 +1,5 @@
+use core::marker::PhantomData;
+
 pub(super) trait ChannelTokenOps {
     fn new(accessor_id: usize) -> Self;
 
@@ -7,28 +9,32 @@ pub(super) trait ChannelTokenOps {
 }
 
 #[derive(Default)]
-pub struct ChannelOwnerToken {
+pub struct ChannelOwnerToken<T> {
     accessor_id: usize,
     is_valid: bool,
+    phantom_marker: PhantomData<T>,
 }
 
 #[derive(Default)]
-pub struct ChannelReaderToken {
+pub struct ChannelReaderToken<T> {
     accessor_id: usize,
     is_valid: bool,
+    phantom_marker: PhantomData<T>,
 }
 
 #[derive(Default)]
-pub struct ChannelBehindToken {
+pub struct ChannelBehindToken<T> {
     accessor_id: usize,
     is_valid: bool,
+    phantom_marker: PhantomData<T>,
 }
 
-impl ChannelTokenOps for ChannelOwnerToken {
+impl<T> ChannelTokenOps for ChannelOwnerToken<T> {
     fn new(accessor_id: usize) -> Self {
         Self {
             accessor_id,
             is_valid: true,
+            phantom_marker: PhantomData,
         }
     }
 
@@ -41,11 +47,12 @@ impl ChannelTokenOps for ChannelOwnerToken {
     }
 }
 
-impl ChannelTokenOps for ChannelReaderToken {
+impl<T> ChannelTokenOps for ChannelReaderToken<T> {
     fn new(accessor_id: usize) -> Self {
         Self {
             accessor_id,
             is_valid: true,
+            phantom_marker: PhantomData,
         }
     }
 
@@ -58,11 +65,12 @@ impl ChannelTokenOps for ChannelReaderToken {
     }
 }
 
-impl ChannelTokenOps for ChannelBehindToken {
+impl<T> ChannelTokenOps for ChannelBehindToken<T> {
     fn new(accessor_id: usize) -> Self {
         Self {
             accessor_id,
             is_valid: true,
+            phantom_marker: PhantomData,
         }
     }
 
