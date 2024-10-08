@@ -100,9 +100,9 @@ impl Component for TestAdder {
     }
 
     fn dispatch(&mut self, channel_store: &comet::channel::store::ChannelStore) {
-        let input_value: i64 = channel_store.grab(&self.input_channel_tok).get();
-        let current_count: i64 = channel_store.grab(&self.output_channel_tok).get();
-        let mod_value: i64 = channel_store.grab(&self.mod_channel_tok).get();
+        let input_value = channel_store.grab(&self.input_channel_tok).get();
+        let current_count = channel_store.grab(&self.output_channel_tok).get();
+        let mod_value = channel_store.grab(&self.mod_channel_tok).get();
         channel_store
             .grab(&self.output_channel_tok)
             .set(current_count + input_value + mod_value);
@@ -170,7 +170,7 @@ impl Component for TestCycleRW {
                 100i64
             );
         }
-        channel_store.grab(&self.write_tok).set(100i64);
+        channel_store.grab(&self.write_tok).set(100);
 
         self.call_count += 1;
     }

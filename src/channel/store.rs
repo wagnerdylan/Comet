@@ -93,7 +93,7 @@ impl ChannelStore {
         ChannelReaderToken::new(accessor_idx)
     }
 
-    pub(self) fn try_obtain_channel_ownership<T>(
+    pub(self) fn try_obtain_channel_ownership<T: 'static>(
         &mut self,
         name: String,
         owner_id: usize,
@@ -107,6 +107,18 @@ impl ChannelStore {
                 IdType::ReaderReq(id) => id,
             }
         };
+
+        if self
+            .channels
+            .get(accessor_idx)
+            .unwrap()
+            .reg
+            .matches_type::<T>()
+            .is_err()
+        {
+            panic!("Channel [{}] does match the requested type.", name);
+        }
+
         self.channels.get_mut(accessor_idx).unwrap().owner_id = IdType::Owner(owner_id);
         self.node_graph
             .as_mut()
@@ -118,7 +130,7 @@ impl ChannelStore {
         ChannelOwnerToken::new(accessor_idx)
     }
 
-    pub(self) fn register_read_channel<T>(
+    pub(self) fn register_read_channel<T: 'static>(
         &mut self,
         name: String,
         read_owner_id: usize,
@@ -138,6 +150,18 @@ impl ChannelStore {
                 }
             }
         };
+
+        if self
+            .channels
+            .get(accessor_idx)
+            .unwrap()
+            .reg
+            .matches_type::<T>()
+            .is_err()
+        {
+            panic!("Channel [{}] does match the requested type.", name);
+        }
+
         // Unchecked call to unwrap() is okay here as register calls are only allowed when node_graph is Some().
         self.node_graph
             .as_mut()
@@ -150,7 +174,10 @@ impl ChannelStore {
         ChannelReaderToken::new(accessor_idx)
     }
 
-    pub(self) fn register_read_behind_channel<T>(&mut self, name: String) -> ChannelBehindToken<T> {
+    pub(self) fn register_read_behind_channel<T: 'static>(
+        &mut self,
+        name: String,
+    ) -> ChannelBehindToken<T> {
         let query_result = self.get_existing_channel_idx(name.as_str());
         let accessor_idx =
             query_result.unwrap_or_else(|_| panic!("Channel [{}] does not exist.", name));
@@ -161,6 +188,10 @@ impl ChannelStore {
                 "Channel [{}] cannot bind as there is no owner for this channel.",
                 name
             )
+        }
+
+        if channel.reg.matches_type::<T>().is_err() {
+            panic!("Channel [{}] does match the requested type.", name);
         }
 
         // Mark the channel as operating as an active behind channel.
@@ -262,12 +293,12 @@ impl ChannelWriteBuilder {
         channel_store.register_write_channel(name, self.owner_id, initial_value)
     }
 
-    pub fn try_obtain_channel_ownership<T>(
+    pub fn try_obtain_channel_ownership<T: 'static>(
         &self,
         channel_store: &mut ChannelStore,
         name: String,
     ) -> ChannelOwnerToken<T> {
-        channel_store.try_obtain_channel_ownership(name, self.owner_id)
+        channel_store.try_obtain_channel_ownership::<T>(name, self.owner_id)
     }
 
     pub fn query_unowned_dangling_channel_names(
@@ -287,7 +318,7 @@ impl ChannelReadBuilder {
         ChannelReadBuilder { owner_id }
     }
 
-    pub fn register_read_channel<T>(
+    pub fn register_read_channel<T: 'static>(
         &self,
         channel_store: &mut ChannelStore,
         name: String,
@@ -295,7 +326,7 @@ impl ChannelReadBuilder {
         channel_store.register_read_channel(name, self.owner_id)
     }
 
-    pub fn register_read_behind_channel<T>(
+    pub fn register_read_behind_channel<T: 'static>(
         &self,
         channel_store: &mut ChannelStore,
         name: String,
@@ -514,5 +545,29 @@ mod unit_tests {
         assert_eq!(reg_val, 100u8);
         reg_behind_val = channel_store.grab(&behind_tok).get();
         assert_eq!(reg_behind_val, 100u8);
+    }
+
+    #[test]
+    #[should_panic(expected = "Channel [test.test1] does match the requested type.")]
+    fn test_channel_register_read_mismatched_type() {
+        let mut channel_store = ChannelStore::default();
+        channel_store.register_write_channel("test.test1".to_string(), 1, 70u8);
+        channel_store.register_read_channel::<u16>("test.test1".to_string(), 2);
+    }
+
+    #[test]
+    #[should_panic(expected = "Channel [test.test1] does match the requested type.")]
+    fn test_channel_register_behind_mismatched_type() {
+        let mut channel_store = ChannelStore::default();
+        channel_store.register_write_channel("test.test1".to_string(), 1, 70u8);
+        channel_store.register_read_behind_channel::<u16>("test.test1".to_string());
+    }
+
+    #[test]
+    #[should_panic(expected = "Channel [test.test1] does match the requested type.")]
+    fn test_channel_register_dangling_mismatched_type() {
+        let mut channel_store = ChannelStore::default();
+        channel_store.register_dangling_channel("test.test1".to_string(), 1, 90u8);
+        channel_store.try_obtain_channel_ownership::<u16>("test.test1".to_string(), 2);
     }
 }

@@ -29,40 +29,31 @@ impl Reg {
         }
     }
 
-    fn get<T: 'static + AnyClone + Clone>(&self) -> T {
+    pub fn matches_type<T: 'static>(&self) -> Result<(), ()> {
         if TypeId::of::<T>() != self.reg_type {
+            return Err(());
+        }
+
+        Ok(())
+    }
+
+    fn matches_type_panic<T: 'static>(&self) {
+        if self.matches_type::<T>().is_err() {
             panic!(
-                "Requested type of [{}] does not match register type for get().",
+                "Requested type of [{}] does not match register type.",
                 any::type_name::<T>()
             )
         }
+    }
+
+    fn get<T: 'static + AnyClone + Clone>(&self) -> T {
+        self.matches_type_panic::<T>();
         self.data.borrow().downcast_ref::<T>().unwrap().clone()
     }
 
-    fn try_get<T: 'static + AnyClone + Clone>(&self) -> Result<T, ()> {
-        if TypeId::of::<T>() != self.reg_type {
-            return Err(());
-        }
-        Ok(self.get())
-    }
-
     fn set<T: 'static>(&self, value: T) {
-        if TypeId::of::<T>() != self.reg_type {
-            panic!(
-                "Requested type of [{}] does not match register type for set().",
-                any::type_name::<T>()
-            )
-        }
-
+        self.matches_type_panic::<T>();
         let _ = mem::replace(self.data.borrow_mut().downcast_mut().unwrap(), value);
-    }
-
-    fn try_set<T: 'static>(&self, value: T) -> Result<(), ()> {
-        if TypeId::of::<T>() != self.reg_type {
-            return Err(());
-        }
-        self.set(value);
-        Ok(())
     }
 }
 
@@ -134,7 +125,7 @@ mod unit_tests {
     }
 
     #[test]
-    #[should_panic(expected = "Requested type of [i32] does not match register type for set().")]
+    #[should_panic(expected = "Requested type of [i32] does not match register type.")]
     fn test_set_reg_type_mismatch() {
         let reg = Reg::new(true);
         let get_reg: bool = reg.get();
@@ -143,23 +134,9 @@ mod unit_tests {
     }
 
     #[test]
-    #[should_panic(expected = "Requested type of [u8] does not match register type for get().")]
+    #[should_panic(expected = "Requested type of [u8] does not match register type.")]
     fn test_get_reg_type_mismatch() {
         let reg = Reg::new(true);
         let _get_reg: u8 = reg.get();
-    }
-
-    #[test]
-    fn test_try_get_set() {
-        let reg = Reg::new(true);
-        let get_reg: Result<bool, ()> = reg.try_get();
-        assert!(get_reg.is_ok());
-        assert!(get_reg.unwrap());
-
-        let get_reg_u8: Result<u8, ()> = reg.try_get();
-        assert!(get_reg_u8.is_err());
-
-        assert!(reg.try_set(false).is_ok());
-        assert!(reg.try_set(9u8).is_err());
     }
 }
