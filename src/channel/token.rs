@@ -8,6 +8,7 @@ pub(super) trait ChannelTokenOps {
     fn is_valid(&self) -> bool;
 }
 
+/// Channel owner token used to access a channel with read and write permissions.
 #[derive(Default)]
 pub struct ChannelOwnerToken<T> {
     accessor_id: usize,
@@ -15,6 +16,7 @@ pub struct ChannelOwnerToken<T> {
     phantom_marker: PhantomData<T>,
 }
 
+/// Channel owner token used to access a channel with read only permissions.
 #[derive(Default)]
 pub struct ChannelReaderToken<T> {
     accessor_id: usize,
@@ -22,6 +24,7 @@ pub struct ChannelReaderToken<T> {
     phantom_marker: PhantomData<T>,
 }
 
+/// Channel behind token used to read the previous channel value.
 #[derive(Default)]
 pub struct ChannelBehindToken<T> {
     accessor_id: usize,

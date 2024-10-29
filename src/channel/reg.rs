@@ -46,17 +46,22 @@ impl Reg {
         }
     }
 
+    /// Accessor method for the value contained within the register. This method
+    /// clones the contained value out to the caller.
     fn get<T: 'static + AnyClone + Clone>(&self) -> T {
         self.matches_type_panic::<T>();
         self.data.borrow().downcast_ref::<T>().unwrap().clone()
     }
 
+    /// Set method for the value contained within the register. The contained value is
+    /// overwritten with the value specified by the caller.
     fn set<T: 'static>(&self, value: T) {
         self.matches_type_panic::<T>();
         let _ = mem::replace(self.data.borrow_mut().downcast_mut().unwrap(), value);
     }
 }
 
+/// View used to access the register with read only permissions.
 pub struct RegReadView<'a, T: 'static + AnyClone + Clone> {
     reg: &'a Reg,
     phantom_marker: PhantomData<T>,
@@ -75,6 +80,7 @@ impl<'a, T: 'static + AnyClone + Clone> RegReadView<'a, T> {
     }
 }
 
+/// View used to access the register with read and write permissions.
 pub struct RegMutView<'a, T: 'static + AnyClone + Clone> {
     reg: &'a Reg,
     phantom_marker: PhantomData<T>,
