@@ -128,7 +128,7 @@ mod unit_tests {
             channel_store: &mut crate::channel::store::ChannelStore,
         ) {
             if let Some(name) = self.1.as_ref() {
-                channel_builder.register_read_channel::<u8>(channel_store, name.clone());
+                channel_builder.bind_read_channel::<u8>(channel_store, name.clone());
             }
         }
     }

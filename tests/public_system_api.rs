@@ -95,8 +95,8 @@ impl Component for TestAdder {
         channel_builder: comet::channel::store::ChannelReadBuilder,
         channel_store: &mut comet::channel::store::ChannelStore,
     ) {
-        self.input_channel_tok = channel_builder
-            .register_read_channel(channel_store, self.input_channel_name.to_string());
+        self.input_channel_tok =
+            channel_builder.bind_read_channel(channel_store, self.input_channel_name.to_string());
     }
 
     fn dispatch(&mut self, channel_store: &comet::channel::store::ChannelStore) {
@@ -147,13 +147,11 @@ impl Component for TestCycleRW {
     ) {
         if self.as_behind {
             self.behind_tok = Some(
-                channel_builder
-                    .register_read_behind_channel(channel_store, self.read_name.to_string()),
+                channel_builder.bind_read_behind_channel(channel_store, self.read_name.to_string()),
             );
         } else {
-            self.read_tok = Some(
-                channel_builder.register_read_channel(channel_store, self.read_name.to_string()),
-            );
+            self.read_tok =
+                Some(channel_builder.bind_read_channel(channel_store, self.read_name.to_string()));
         }
     }
 

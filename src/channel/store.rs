@@ -163,7 +163,7 @@ impl ChannelStore {
     /// - 'name': Name of the channel requested for access.
     /// - 'read_owner_id': ID of the caller requesting access.
     ///
-    pub(self) fn register_read_channel<T: 'static>(
+    pub(self) fn bind_read_channel<T: 'static>(
         &mut self,
         name: String,
         read_owner_id: usize,
@@ -216,7 +216,7 @@ impl ChannelStore {
     /// ### Argument
     /// - 'name': Name of the channel for previous value access.
     ///
-    pub(self) fn register_read_behind_channel<T: 'static>(
+    pub(self) fn bind_read_behind_channel<T: 'static>(
         &mut self,
         name: String,
     ) -> ChannelBehindToken<T> {
@@ -361,20 +361,20 @@ impl ChannelReadBuilder {
         ChannelReadBuilder { owner_id }
     }
 
-    pub fn register_read_channel<T: 'static>(
+    pub fn bind_read_channel<T: 'static>(
         &self,
         channel_store: &mut ChannelStore,
         name: String,
     ) -> ChannelReaderToken<T> {
-        channel_store.register_read_channel(name, self.owner_id)
+        channel_store.bind_read_channel(name, self.owner_id)
     }
 
-    pub fn register_read_behind_channel<T: 'static>(
+    pub fn bind_read_behind_channel<T: 'static>(
         &self,
         channel_store: &mut ChannelStore,
         name: String,
     ) -> ChannelBehindToken<T> {
-        channel_store.register_read_behind_channel(name)
+        channel_store.bind_read_behind_channel(name)
     }
 }
 
@@ -467,7 +467,7 @@ mod unit_tests {
     }
 
     #[test]
-    fn test_register_read_channel() {
+    fn test_bind_read_channel() {
         let mut channel_store = ChannelStore::default();
         let test1_channel_name = "test1.test.channel";
         let test1_owner_id = 1usize;
@@ -475,32 +475,32 @@ mod unit_tests {
 
         let test2_owner_id = 2usize;
         let test2_read_token =
-            channel_store.register_read_channel(test1_channel_name.to_string(), test2_owner_id);
+            channel_store.bind_read_channel(test1_channel_name.to_string(), test2_owner_id);
         let test2_channel_value: u8 = channel_store.grab(&test2_read_token).get();
         assert_eq!(test2_channel_value, 8u8);
     }
 
     #[test]
     #[should_panic(expected = "Channel [test1.test.channel] does not exist.")]
-    fn test_empty_register_read_channel() {
+    fn test_empty_bind_read_channel() {
         let mut channel_store = ChannelStore::default();
         let test1_channel_name = "test1.test.channel";
         let test_owner_id = 1usize;
 
         let _test1_read_token: crate::channel::token::ChannelReaderToken<usize> =
-            channel_store.register_read_channel(test1_channel_name.to_string(), test_owner_id);
+            channel_store.bind_read_channel(test1_channel_name.to_string(), test_owner_id);
     }
 
     #[test]
     #[should_panic(expected = "Channel [test2.test.channel] does not exist.")]
-    fn test_mismatch_register_read_channel() {
+    fn test_mismatch_bind_read_channel() {
         let mut channel_store = ChannelStore::default();
         let test1_channel_name = "test1.test.channel";
         let test_owner_id = 1usize;
         channel_store.register_write_channel(test1_channel_name.to_string(), test_owner_id, 8u8);
 
         let _test1_read_token: crate::channel::token::ChannelReaderToken<usize> =
-            channel_store.register_read_channel("test2.test.channel".to_string(), test_owner_id);
+            channel_store.bind_read_channel("test2.test.channel".to_string(), test_owner_id);
     }
 
     #[test]
@@ -547,9 +547,9 @@ mod unit_tests {
     fn test_behind_channel_register() {
         let mut channel_store = ChannelStore::default();
         channel_store.register_write_channel("test.test1".to_string(), 1, 70u8);
-        channel_store.register_read_channel::<u8>("test.test1".to_string(), 2);
+        channel_store.bind_read_channel::<u8>("test.test1".to_string(), 2);
         let behind_tok: crate::channel::token::ChannelBehindToken<u8> =
-            channel_store.register_read_behind_channel("test.test1".to_string());
+            channel_store.bind_read_behind_channel("test.test1".to_string());
 
         assert_eq!(behind_tok.get_accessor_id(), 0usize);
         assert!(channel_store.channels.first().unwrap().behind_reg.is_some());
@@ -568,7 +568,7 @@ mod unit_tests {
     fn test_behind_channel_update() {
         let mut channel_store = ChannelStore::default();
         let write_tok = channel_store.register_write_channel("test.test1".to_string(), 1, 70u8);
-        let behind_tok = channel_store.register_read_behind_channel("test.test1".to_string());
+        let behind_tok = channel_store.bind_read_behind_channel("test.test1".to_string());
 
         let mut reg_val: u8 = channel_store.grab(&write_tok).get();
         assert_eq!(reg_val, 70u8);
@@ -595,7 +595,7 @@ mod unit_tests {
     fn test_channel_register_read_mismatched_type() {
         let mut channel_store = ChannelStore::default();
         channel_store.register_write_channel("test.test1".to_string(), 1, 70u8);
-        channel_store.register_read_channel::<u16>("test.test1".to_string(), 2);
+        channel_store.bind_read_channel::<u16>("test.test1".to_string(), 2);
     }
 
     #[test]
@@ -603,7 +603,7 @@ mod unit_tests {
     fn test_channel_register_behind_mismatched_type() {
         let mut channel_store = ChannelStore::default();
         channel_store.register_write_channel("test.test1".to_string(), 1, 70u8);
-        channel_store.register_read_behind_channel::<u16>("test.test1".to_string());
+        channel_store.bind_read_behind_channel::<u16>("test.test1".to_string());
     }
 
     #[test]
