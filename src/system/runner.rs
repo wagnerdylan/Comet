@@ -9,6 +9,29 @@ use crate::{
 
 use super::component::{Component, ComponentHolder};
 
+/// Runner used to hold all components and channels which intend to be executed together.
+///
+/// # Example
+/// ```
+/// use self::{comet::system::runner::Runner, comet::system::component::Component};
+///
+/// struct TestComponent;
+///
+/// impl Component for TestComponent {
+///     fn dispatch(&mut self, channel_store: &comet::channel::store::ChannelStore) {
+///     }
+/// }
+///
+/// let mut runner = Runner::default();
+///
+/// // Include as many components as needed into the runner.
+/// runner.add_component(Box::new(TestComponent{}));
+/// // Initialize the runner.
+/// runner.initialize();
+///
+/// // Call within encapsulating execution logic which wraps Comet.
+/// runner.dispatch_components();
+/// ```
 #[derive(Default)]
 pub struct Runner {
     components: Vec<ComponentHolder>,
@@ -18,6 +41,11 @@ pub struct Runner {
 }
 
 impl Runner {
+    /// Include a component into the runner for execution during runtime.
+    ///
+    /// ### Argument
+    /// * 'component' - Component to be added into the runner object.
+    ///
     pub fn add_component(&mut self, component: Box<dyn Component>) {
         assert!(!self.init_complete);
         self.components.push(ComponentHolder {
@@ -27,6 +55,8 @@ impl Runner {
         self.component_counter += 1;
     }
 
+    /// Initialize the component runner to prepare for runtime. This method must be called
+    /// exactly once after all components have been added and before the first dispatch_components() call.
     pub fn initialize(&mut self) {
         assert!(!self.init_complete);
 
@@ -68,6 +98,7 @@ impl Runner {
         self.init_complete = true;
     }
 
+    /// Dispatch all included components into the runner object.
     pub fn dispatch_components(&mut self) {
         assert!(self.init_complete);
 
@@ -78,6 +109,7 @@ impl Runner {
         self.channel_store.update_active_behind_registers();
     }
 
+    /// Re-layout component ordering following provided topology.
     fn modify_component_ordering(&mut self, ordering: Vec<usize>) {
         for (insert_idx, component_id) in ordering.iter().enumerate() {
             let component_idx = self

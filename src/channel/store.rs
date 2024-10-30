@@ -75,13 +75,6 @@ impl ChannelStore {
         accessor_id
     }
 
-    /// Register a new owned channel into the channels list.
-    ///
-    /// ### Arguments
-    /// - 'name': Unique channel name in string form.
-    /// - 'owner_id': ID of the channel owner.
-    /// - 'initial_value': Value to be assigned into this channel on init.
-    ///
     pub(self) fn register_write_channel<T: AnyClone>(
         &mut self,
         name: String,
@@ -93,33 +86,17 @@ impl ChannelStore {
         ChannelOwnerToken::new(accessor_idx)
     }
 
-    /// Register a new dangling channel into the channels list. A dangling channel is a construct which
-    /// is created by the caller but not owned. Other callers into the ChannelStore may "pick-up" ownership
-    /// of this channel. A dangling channel may be used in instances which a given reader requires a value
-    /// but does not care exactly where the value comes from.
-    ///
-    /// ### Arguments
-    /// - 'name': Unique channel name in string form.
-    /// - 'reader_id': ID of the channel creator.
-    /// - 'initial_value': Value to be assigned into this channel on init.
-    ///
     pub(self) fn register_dangling_channel<T: AnyClone>(
         &mut self,
         name: String,
         reader_id: usize,
-        initial_value: T,
+        default_value: T,
     ) -> ChannelReaderToken<T> {
         let accessor_idx: usize =
-            self.register_channel(name, IdType::ReaderReq(reader_id), Reg::new(initial_value));
+            self.register_channel(name, IdType::ReaderReq(reader_id), Reg::new(default_value));
         ChannelReaderToken::new(accessor_idx)
     }
 
-    /// Method used to obtain ownership of a dangling channel.
-    ///
-    /// ### Arguments
-    /// - 'name': Name of the channel to be owned by the caller.
-    /// - 'owner_id': ID of the caller requesting ownership of the channel.
-    ///
     pub(self) fn try_obtain_channel_ownership<T: 'static>(
         &mut self,
         name: String,
@@ -157,12 +134,6 @@ impl ChannelStore {
         ChannelOwnerToken::new(accessor_idx)
     }
 
-    /// Bind a caller to an owned channel for access.
-    ///
-    /// ### Arguments
-    /// - 'name': Name of the channel requested for access.
-    /// - 'read_owner_id': ID of the caller requesting access.
-    ///
     pub(self) fn bind_read_channel<T: 'static>(
         &mut self,
         name: String,
@@ -207,15 +178,6 @@ impl ChannelStore {
         ChannelReaderToken::new(accessor_idx)
     }
 
-    /// Bind a caller to a channel for accessing the previous value of a channel. Access to the
-    /// previous value of a channel is called a "behind channel". This construct is useful for
-    /// breaking channel dependency cycles which may occur. Care must be taken in breaking channel
-    /// dependencies with a behind channel as the value returned will be one call previous to the most
-    /// recent channel value.
-    ///
-    /// ### Argument
-    /// - 'name': Name of the channel for previous value access.
-    ///
     pub(self) fn bind_read_behind_channel<T: 'static>(
         &mut self,
         name: String,
@@ -270,6 +232,7 @@ impl ChannelStore {
 }
 
 pub trait RegViewProducer<'a, C, K> {
+    /// Produce a register accessor view following a given token type.
     fn grab(&'a self, token: &C) -> K;
 }
 
@@ -327,6 +290,13 @@ impl ChannelWriteBuilder {
         ChannelWriteBuilder { owner_id }
     }
 
+    /// Register a new owned channel into the channels list.
+    ///
+    /// ### Arguments
+    /// * 'channel_store' - ChannelStore object in which to perform channel operations on.
+    /// * 'name' - Unique channel name in string form.
+    /// * 'initial_value' - Value to be assigned into this channel on init.
+    ///
     pub fn register_write_channel<T: AnyClone>(
         &self,
         channel_store: &mut ChannelStore,
@@ -336,6 +306,12 @@ impl ChannelWriteBuilder {
         channel_store.register_write_channel(name, self.owner_id, initial_value)
     }
 
+    /// Method used to obtain ownership of a dangling channel.
+    ///
+    /// ### Arguments
+    /// * 'channel_store' - ChannelStore object in which to perform channel operations on.
+    /// * 'name' - Name of the channel to be owned by the caller.
+    ///
     pub fn try_obtain_channel_ownership<T: 'static>(
         &self,
         channel_store: &mut ChannelStore,
@@ -361,6 +337,12 @@ impl ChannelReadBuilder {
         ChannelReadBuilder { owner_id }
     }
 
+    /// Bind a caller to an owned channel for access.
+    ///
+    /// ### Arguments
+    /// * 'channel_store' - ChannelStore object in which to perform channel operations on.
+    /// * 'name' - Name of the channel requested for access.
+    ///
     pub fn bind_read_channel<T: 'static>(
         &self,
         channel_store: &mut ChannelStore,
@@ -369,6 +351,16 @@ impl ChannelReadBuilder {
         channel_store.bind_read_channel(name, self.owner_id)
     }
 
+    /// Bind a caller to a channel for accessing the previous value of a channel. Access to the
+    /// previous value of a channel is called a "behind channel". This construct is useful for
+    /// breaking channel dependency cycles which may occur. Care must be taken in breaking channel
+    /// dependencies with a behind channel as the value returned will be one call previous to the most
+    /// recent channel value.
+    ///
+    /// ### Argument
+    /// * 'channel_store' - ChannelStore object in which to perform channel operations on.
+    /// * 'name' - Name of the channel for previous value access.
+    ///
     pub fn bind_read_behind_channel<T: 'static>(
         &self,
         channel_store: &mut ChannelStore,
@@ -387,6 +379,16 @@ impl ChannelDanglingBuilder {
         ChannelDanglingBuilder { owner_id }
     }
 
+    /// Register a new dangling channel into the channels list. A dangling channel is a construct which
+    /// is created by the caller but not owned. Other callers into the ChannelStore may "pick-up" ownership
+    /// of this channel. A dangling channel may be used in instances which a given reader requires a value
+    /// but does not care exactly where the value comes from.
+    ///
+    /// ### Arguments
+    /// * 'channel_store' - ChannelStore object in which to perform channel operations on.
+    /// * 'name' - Unique channel name in string form.
+    /// * 'default_value' - Value to be assigned into this channel on init.
+    ///
     pub fn register_dangling_channel<T: AnyClone>(
         &self,
         channel_store: &mut ChannelStore,
